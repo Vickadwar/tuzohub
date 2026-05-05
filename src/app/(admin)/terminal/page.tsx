@@ -142,9 +142,8 @@ export default function LoyaltyTerminal() {
 
           <div>
             <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white">
-                Loyalty Terminal
-              </h1>
-            </div>
+              Loyalty Terminal
+            </h1>
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
               Admin voucher claim — scan serial number and process instant M-PESA payout.
             </p>
