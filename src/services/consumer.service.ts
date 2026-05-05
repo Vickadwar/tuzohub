@@ -250,7 +250,7 @@ export class ConsumerService {
 
     // Compute top products from metadata - only count CREDIT (earning) transactions
     const productCounts: Record<string, { name: string; count: number; totalPoints: number }> = {};
-    for (const tx of allTransactions.filter(t => t.accountingEntry === 'CREDIT')) {
+    for (const tx of allTransactions.filter((t: any) => t.accountingEntry === 'CREDIT')) {
       const meta = tx.metadata as any;
       const productName = meta?.productName || tx.description || "Unknown";
       if (!productCounts[productName]) {

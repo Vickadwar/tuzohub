@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect, useState } from "react";
 import PageBreadcrumb from "@/components/common/PageBreadCrumb";
-import { Badge } from "@/components/ui/badge";
+import Badge from "@/components/ui/badge/Badge";
 import Button from "@/components/ui/button/Button";
 
 export default function RegistrationsPage() {
@@ -78,6 +78,11 @@ export default function RegistrationsPage() {
                     <td className="px-6 py-4">
                       <div className="text-sm font-medium text-gray-900 dark:text-white">Admin User</div>
                       <div className="text-xs text-gray-500">{reg.createdAt ? new Date(reg.createdAt).toLocaleDateString() : "N/A"}</div>
+                    </td>
+                    <td className="px-6 py-4">
+                       <Badge color={reg.status === 'pending' ? 'warning' : reg.status === 'active' ? 'success' : 'error'}>
+                          {reg.status.toUpperCase()}
+                       </Badge>
                     </td>
                     <td className="px-6 py-4 text-right space-x-2">
                       {reg.status === "pending" && (

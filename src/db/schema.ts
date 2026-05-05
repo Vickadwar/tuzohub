@@ -1989,13 +1989,13 @@ export const consumerBadges = pgTable("consumer_badges", {
 
 // ============================================================================
 // 27. COMPLETE RELATIONS (Consolidated & Enhanced)
-// ============================================================================
 
 export const tenantsRelations = relations(tenants, ({ many, one }) => ({
   users: many(users),
   organizations: many(organizations),
   consumers: many(consumers),
   products: many(products),
+  country: one(countries, { fields: [tenants.countryId], references: [countries.id] }),
   tenantSettings: one(tenantSettings, { fields: [tenants.id], references: [tenantSettings.tenantId] }),
   regions: many(regions),
   towns: many(towns),
