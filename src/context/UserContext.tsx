@@ -37,16 +37,20 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
         headers: {
           Authorization: `Bearer ${session.access_token}`,
         },
+        credentials: "omit", // Fix for 431: Don't send cookies when manual Auth header is present
       });
 
       if (response.ok) {
         const result = await response.json();
-        setUser(result.data);
+        const userData = result.data || result.user || result;
+        setUser(userData);
       } else {
+        const errorText = await response.text().catch(() => "Unknown error");
+        console.error(`[UserContext] Profile fetch failed (${response.status}):`, errorText);
         setUser(null);
       }
     } catch (error) {
-      console.error("Error fetching user profile:", error);
+      console.error("[UserContext] Error in fetchProfile:", error);
       setUser(null);
     } finally {
       setLoading(false);

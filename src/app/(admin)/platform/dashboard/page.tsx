@@ -3,6 +3,8 @@ import React, { useEffect, useState } from "react";
 import ComponentCard from "@/components/common/ComponentCard";
 import { GroupIcon, BoxCubeIcon, PieChartIcon, TableIcon } from "@/icons";
 
+import EcosystemCirculationChart from "@/components/platform/EcosystemCirculationChart";
+
 export default function PlatformDashboard() {
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -69,11 +71,7 @@ export default function PlatformDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
          <div className="lg:col-span-2">
             <ComponentCard title="Ecosystem Scale (Circulation)">
-               <div className="h-80 flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-900/40 rounded-2xl border border-dashed border-gray-200 dark:border-gray-800">
-                  <PieChartIcon className="w-12 h-12 text-gray-200 mb-4" />
-                  <p className="text-sm text-gray-400 font-medium">Points Distribution by Tenant</p>
-                  <p className="text-[10px] text-gray-300 uppercase mt-2">Aggregate data visualization coming soon</p>
-               </div>
+               <EcosystemCirculationChart data={stats?.tenantDistribution || []} loading={loading} />
             </ComponentCard>
          </div>
 

@@ -23,6 +23,7 @@ import smsRoutes from "./routes/sms";
 import mpesaRoutes from "./routes/mpesa";
 import publicRoutes from "./routes/public";
 import systemRoutes from "./routes/system";
+import billingRoutes from "./routes/billing";
 
 type Variables = {
   user: {
@@ -86,6 +87,7 @@ app.route("/sales", salesRoutes);
 app.route("/organizations", organizationsRoutes);
 app.route("/transactions", transactionsRoutes);
 app.route("/system", systemRoutes);
+app.route("/billing", billingRoutes);
 
 // USSD, SMS & M-Pesa callbacks are PUBLIC
 app.route("/ussd", ussdRoutes);

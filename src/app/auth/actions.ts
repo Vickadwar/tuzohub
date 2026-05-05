@@ -4,7 +4,7 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
-import { users, tenants } from "@/db/schema";
+import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
 export async function signIn(formData: FormData) {
@@ -95,5 +95,5 @@ export async function signOut() {
   );
 
   await supabase.auth.signOut();
-  redirect("/auth/login");
+  return { success: true };
 }

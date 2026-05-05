@@ -1,15 +1,17 @@
 "use client";
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useSidebar } from "../context/SidebarContext";
 import { useUser } from "../context/UserContext";
+import { signOut as serverSignOut } from "@/app/auth/actions";
+import { supabase } from "@/lib/supabase";
+import { clearAllCookies } from "@/lib/utils";
 import {
   BoxCubeIcon,
   ChevronDownIcon,
   GridIcon,
   PieChartIcon,
-  TableIcon,
   UserCircleIcon,
   GroupIcon,
   ShootingStarIcon,
@@ -27,28 +29,50 @@ type NavItem = {
 };
 
 const navItems: NavItem[] = [
-  // ── ADMIN SECTION (Top priority for Super Admins) ──────────────
+  // ── PLATFORM SECTION (Super Admins Only) ───────────────────────
   {
     icon: <PieChartIcon />,
-    name: "Platform Management",
+    name: "Platform",
     roles: ["SYSTEM_ADMIN"],
     subItems: [
       { name: "Global Dashboard", path: "/platform/dashboard" },
-      { name: "Pending Registrations", path: "/admin/registrations" },
       { name: "Manage Tenants", path: "/platform/tenants" },
+      { name: "Pending Registrations", path: "/admin/registrations" },
       { name: "System Billing", path: "/platform/billing" },
     ],
   },
   
-  // ── TENANT SECTION (Only for Tenant Admins) ────────────────────
-  { icon: <GridIcon />, name: "Overview", path: "/overview", roles: ["TENANT_ADMIN", "USER", "STAFF"] },
-  { icon: <GroupIcon />, name: "Consumers", path: "/consumers", roles: ["TENANT_ADMIN", "STAFF"] },
-  { icon: <BoxCubeIcon />, name: "Campaigns", path: "/campaigns", roles: ["TENANT_ADMIN", "STAFF"] },
-  { icon: <ShootingStarIcon />, name: "Rewards Catalog", path: "/rewards", roles: ["TENANT_ADMIN", "STAFF"] },
+  // ── TENANT OPERATIONS (Tenant Admins & Staff) ──────────────────
+  { 
+    icon: <GridIcon />, 
+    name: "Overview", 
+    path: "/overview", 
+    roles: ["TENANT_ADMIN", "MANAGER", "OPERATOR", "VIEWER", "AGENT", "SYSTEM_ADMIN"] 
+  },
+  { 
+    icon: <GroupIcon />, 
+    name: "Consumers", 
+    path: "/consumers", 
+    roles: ["TENANT_ADMIN", "MANAGER", "OPERATOR", "SYSTEM_ADMIN"] 
+  },
+  { 
+    icon: <BoxCubeIcon />, 
+    name: "Campaigns", 
+    path: "/campaigns", 
+    roles: ["TENANT_ADMIN", "MANAGER", "SYSTEM_ADMIN"] 
+  },
+  { 
+    icon: <ShootingStarIcon />, 
+    name: "Rewards Catalog", 
+    path: "/rewards", 
+    roles: ["TENANT_ADMIN", "MANAGER", "OPERATOR", "SYSTEM_ADMIN"] 
+  },
+
+  // ── INVENTORY & LOGISTICS ──────────────────────────────────────
   {
     name: "Inventory",
     icon: <BoxIconLine />,
-    roles: ["TENANT_ADMIN", "STAFF"],
+    roles: ["TENANT_ADMIN", "MANAGER", "OPERATOR", "SYSTEM_ADMIN"],
     subItems: [
       { name: "Product List", path: "/products" },
       { name: "Production Batches", path: "/production" },
@@ -56,14 +80,26 @@ const navItems: NavItem[] = [
       { name: "Voucher Inventory", path: "/vouchers/list" },
     ],
   },
-  { icon: <ListIcon />, name: "Terminal", path: "/terminal", roles: ["TENANT_ADMIN", "STAFF"] },
-  { icon: <DollarLineIcon />, name: "Transactions", path: "/transactions", roles: ["TENANT_ADMIN", "STAFF"] },
 
-  // ── SHARED / SETUP SECTION ─────────────────────────────────────
+  // ── TOOLS & TRANSACTIONS ───────────────────────────────────────
+  { 
+    icon: <ListIcon />, 
+    name: "Terminal", 
+    path: "/terminal", 
+    roles: ["TENANT_ADMIN", "MANAGER", "OPERATOR", "AGENT", "SYSTEM_ADMIN"] 
+  },
+  { 
+    icon: <DollarLineIcon />, 
+    name: "Transactions", 
+    path: "/transactions", 
+    roles: ["TENANT_ADMIN", "MANAGER", "VIEWER", "SYSTEM_ADMIN"] 
+  },
+
+  // ── SETUP & TEAM ───────────────────────────────────────────────
   {
     icon: <GridIcon />,
     name: "Setup & Masters",
-    roles: ["TENANT_ADMIN", "SYSTEM_ADMIN"], // Super admins might need to setup the platform tenant
+    roles: ["TENANT_ADMIN", "SYSTEM_ADMIN"],
     subItems: [
       { name: "Platform Settings", path: "/settings" },
       { name: "Organizations", path: "/settings/organizations" },
@@ -78,18 +114,20 @@ const navItems: NavItem[] = [
 
 const AppSidebar: React.FC = () => {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
-  const { user } = useUser();
+  const { user, loading } = useUser();
   const pathname = usePathname();
+  const router = useRouter();
   const isOpen = isExpanded || isHovered || isMobileOpen;
 
   const filteredNavItems = navItems.filter(item => {
+    if (loading) return !item.roles;
     if (!item.roles) return true;
     return user?.role && item.roles.includes(user.role);
   });
 
-  const [openSubmenu, setOpenSubmenu] = useState<{ index: number } | null>(null);
-  const [subMenuHeight, setSubMenuHeight] = useState<Record<number, number>>({});
-  const subMenuRefs = useRef<Record<number, HTMLDivElement | null>>({});
+  const [openSubmenu, setOpenSubmenu] = useState<string | null>(null);
+  const [subMenuHeight, setSubMenuHeight] = useState<Record<string, number>>({});
+  const subMenuRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const isActive = useCallback((path: string) => path === pathname, [pathname]);
   const isParentActive = useCallback(
@@ -98,27 +136,36 @@ const AppSidebar: React.FC = () => {
   );
 
   useEffect(() => {
-    let matched = false;
-    navItems.forEach((nav, index) => {
+    navItems.forEach((nav) => {
       if (nav.subItems?.some((sub) => isActive(sub.path))) {
-        setOpenSubmenu({ index });
-        matched = true;
+        setOpenSubmenu(nav.name);
       }
     });
-    if (!matched) setOpenSubmenu(null);
   }, [pathname, isActive]);
 
   useEffect(() => {
-    if (openSubmenu !== null && subMenuRefs.current[openSubmenu.index]) {
+    if (openSubmenu !== null && subMenuRefs.current[openSubmenu]) {
       setSubMenuHeight((prev) => ({
         ...prev,
-        [openSubmenu.index]: subMenuRefs.current[openSubmenu.index]?.scrollHeight || 0,
+        [openSubmenu]: subMenuRefs.current[openSubmenu]?.scrollHeight || 0,
       }));
     }
   }, [openSubmenu]);
 
-  const toggleSubmenu = (index: number) => {
-    setOpenSubmenu((prev) => (prev?.index === index ? null : { index }));
+  const toggleSubmenu = (name: string) => {
+    setOpenSubmenu((prev) => (prev === name ? null : name));
+  };
+
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+      clearAllCookies();
+      await serverSignOut().catch(() => {});
+      router.push("/auth/login");
+    } catch (error) {
+      console.error("Logout failed:", error);
+      window.location.href = "/auth/login";
+    }
   };
 
   return (
@@ -155,12 +202,12 @@ const AppSidebar: React.FC = () => {
           </p>
         )}
         <ul className="flex flex-col gap-0.5 px-2.5">
-          {filteredNavItems.map((nav, index) => (
+          {filteredNavItems.map((nav) => (
             <li key={nav.name}>
               {nav.subItems ? (
                 <>
                   <button
-                    onClick={() => toggleSubmenu(index)}
+                    onClick={() => toggleSubmenu(nav.name)}
                     title={!isOpen ? nav.name : undefined}
                     className={`light-sidebar-item w-full ${
                       isParentActive(nav) ? "light-sidebar-item-active" : "light-sidebar-item-inactive"
@@ -172,7 +219,7 @@ const AppSidebar: React.FC = () => {
                         <span className="flex-1 text-left truncate">{nav.name}</span>
                         <ChevronDownIcon
                           className={`w-3.5 h-3.5 shrink-0 transition-transform duration-200 ${
-                            openSubmenu?.index === index ? "rotate-180 text-brand-500" : "text-gray-300"
+                            openSubmenu === nav.name ? "rotate-180 text-brand-500" : "text-gray-300"
                           }`}
                         />
                       </>
@@ -180,9 +227,9 @@ const AppSidebar: React.FC = () => {
                   </button>
                   {isOpen && (
                     <div
-                      ref={(el) => { subMenuRefs.current[index] = el; }}
+                      ref={(el) => { subMenuRefs.current[nav.name] = el; }}
                       className="overflow-hidden transition-all duration-200"
-                      style={{ height: openSubmenu?.index === index ? `${subMenuHeight[index]}px` : "0px" }}
+                      style={{ height: openSubmenu === nav.name ? `${subMenuHeight[nav.name]}px` : "0px" }}
                     >
                       <ul className="ml-5 mt-0.5 border-l-2 border-gray-100 dark:border-white/[0.06] pl-3 pb-1 space-y-0.5">
                         {nav.subItems.map((sub) => (
@@ -226,21 +273,49 @@ const AppSidebar: React.FC = () => {
       </nav>
 
       {/* Footer */}
-      <div className={`h-[56px] border-t border-gray-100 dark:border-white/[0.06] flex items-center px-3.5 shrink-0 gap-3 ${!isOpen ? "justify-center" : ""}`}>
-        <div className="w-8 h-8 rounded-full bg-brand-50 dark:bg-brand-500/20 flex items-center justify-center shrink-0 border border-brand-100 dark:border-brand-500/30">
-          <span className="text-brand-500 font-bold text-xs">
-            {user?.role?.charAt(0) || "U"}
-          </span>
-        </div>
-        {isOpen && (
-          <div className="flex-1 min-w-0">
-            <p className="text-[13px] font-semibold text-gray-800 dark:text-white/80 truncate leading-tight">
-              {user ? `${user.firstName} ${user.lastName}` : "Guest"}
-            </p>
-            <p className="text-[11px] text-gray-400 truncate leading-tight">
-              {user?.email || "Visitor"}
-            </p>
+      <div className={`border-t border-gray-100 dark:border-white/[0.06] p-3.5 shrink-0 ${!isOpen ? "flex items-center justify-center" : ""}`}>
+        <div className={`flex items-center gap-3 ${!isOpen ? "justify-center" : ""}`}>
+          <div className="w-8 h-8 rounded-full bg-brand-50 dark:bg-brand-500/20 flex items-center justify-center shrink-0 border border-brand-100 dark:border-brand-500/30">
+            <span className="text-brand-500 font-bold text-xs">
+              {user?.role?.charAt(0) || "U"}
+            </span>
           </div>
+          {isOpen && (
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px] font-semibold text-gray-800 dark:text-white/80 truncate leading-tight">
+                {user ? `${user.firstName} ${user.lastName}` : "Guest"}
+              </p>
+              <p className="text-[11px] text-gray-400 truncate leading-tight">
+                {user?.role?.replace("_", " ") || "Visitor"}
+              </p>
+            </div>
+          )}
+          {isOpen && (
+            <button 
+              onClick={handleLogout}
+              className="p-1.5 rounded-md text-gray-400 hover:text-error-500 hover:bg-error-50 transition-colors"
+              title="Logout"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                <polyline points="16 17 21 12 16 7"></polyline>
+                <line x1="21" y1="12" x2="9" y2="12"></line>
+              </svg>
+            </button>
+          )}
+        </div>
+        {!isOpen && (
+          <button 
+            onClick={handleLogout}
+            className="mt-2 p-1.5 rounded-md text-gray-400 hover:text-error-500 hover:bg-error-50 transition-colors"
+            title="Logout"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+              <polyline points="16 17 21 12 16 7"></polyline>
+              <line x1="21" y1="12" x2="9" y2="12"></line>
+            </svg>
+          </button>
         )}
       </div>
     </aside>

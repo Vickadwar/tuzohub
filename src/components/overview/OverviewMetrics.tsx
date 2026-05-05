@@ -5,7 +5,7 @@ import { ArrowDownIcon, ArrowUpIcon, GroupIcon, BoxIconLine } from "@/icons";
 import { useApi } from "@/hooks/useApi";
 
 export default function OverviewMetrics() {
-  const { data: stats, isLoading } = useApi("/loyalty/stats/overview");
+  const { data: stats, isLoading, isError } = useApi("/loyalty/stats/overview");
 
   const formatNumber = (num: number | string) => {
     const value = typeof num === "string" ? parseFloat(num) : num;
@@ -28,6 +28,14 @@ export default function OverviewMetrics() {
         {[1, 2, 3, 4].map((i) => (
           <div key={i} className="h-32 rounded-2xl bg-gray-100 dark:bg-white/5"></div>
         ))}
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="col-span-12 p-6 rounded-2xl border border-error-100 bg-error-50 text-error-700">
+        <p className="text-sm font-medium">Failed to load overview metrics. Please check your connection or try again later.</p>
       </div>
     );
   }

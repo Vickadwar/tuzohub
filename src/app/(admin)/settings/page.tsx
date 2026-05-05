@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { authenticatedFetch } from "@/hooks/useApi";
 import ModernSelect from "@/components/ui/ModernSelect";
+import Checkbox from "@/components/form/input/Checkbox";
 
 // ─── Reusable Field Component ────────────────────────────────────────
 function Field({ label, hint, action, children }: { label: string; hint?: React.ReactNode; action?: React.ReactNode; children: React.ReactNode }) {
@@ -41,8 +42,6 @@ function LocalTextInput({ className, ...props }: React.InputHTMLAttributes<HTMLI
   );
 }
 
-
-
 export default function PlatformSettingsPage() {
   const [tenantSlug, setTenantSlug] = useState("");
   const [formData, setFormData] = useState({
@@ -50,6 +49,26 @@ export default function PlatformSettingsPage() {
     baseCurrency: "",
     defaultPointValue: "1.00",
     pointExpiryMonths: "12",
+    
+    // Consumer Controls
+    defaultCanPurchase: true,
+    defaultCanEarnPoints: true,
+    defaultCanRedeemPoints: true,
+    defaultCanBankPoints: true,
+    defaultCanTransferPoints: false,
+
+    // Fraud & Security
+    maxFailedRedemptionsPerHour: 5,
+    requireMfaForRedemption: false,
+    redemptionVelocityCheckMinutes: 60,
+    maxPointsEarnedPerDay: "1000",
+
+    // Branding
+    brandPrimaryColor: "#4f46e5",
+    brandLogoUrl: "",
+    smsSenderId: "",
+
+    // Credentials
     atUsername: "",
     atApiKey: "",
     atSenderId: "",
@@ -66,7 +85,6 @@ export default function PlatformSettingsPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  // Load tenant data + master lists on mount
   useEffect(() => {
     const load = async () => {
       try {
@@ -78,19 +96,36 @@ export default function PlatformSettingsPage() {
 
         if (tenantRes.success && tenantRes.data) {
           const t = tenantRes.data;
+          const s = t.settings || {};
           setTenantSlug(t.slug || "");
           setFormData({
             countryId: t.countryId || "",
             baseCurrency: t.baseCurrency || "",
             defaultPointValue: t.defaultPointValue || "1.00",
             pointExpiryMonths: String(t.pointExpiryMonths || 12),
-            atUsername: t.settings?.credentials?.atUsername || "",
-            atApiKey: t.settings?.credentials?.atApiKey || "",
-            atSenderId: t.settings?.credentials?.atSenderId || "",
-            darajaConsumerKey: t.settings?.credentials?.darajaConsumerKey || "",
-            darajaConsumerSecret: t.settings?.credentials?.darajaConsumerSecret || "",
-            darajaShortCode: t.settings?.credentials?.darajaShortCode || "",
-            darajaInitiatorName: t.settings?.credentials?.darajaInitiatorName || "",
+            
+            defaultCanPurchase: s.defaultCanPurchase ?? true,
+            defaultCanEarnPoints: s.defaultCanEarnPoints ?? true,
+            defaultCanRedeemPoints: s.defaultCanRedeemPoints ?? true,
+            defaultCanBankPoints: s.defaultCanBankPoints ?? true,
+            defaultCanTransferPoints: s.defaultCanTransferPoints ?? false,
+
+            maxFailedRedemptionsPerHour: s.maxFailedRedemptionsPerHour ?? 5,
+            requireMfaForRedemption: s.requireMfaForRedemption ?? false,
+            redemptionVelocityCheckMinutes: s.redemptionVelocityCheckMinutes ?? 60,
+            maxPointsEarnedPerDay: s.maxPointsEarnedPerDay ?? "1000",
+
+            brandPrimaryColor: s.brandPrimaryColor || "#4f46e5",
+            brandLogoUrl: s.brandLogoUrl || "",
+            smsSenderId: s.smsSenderId || "",
+
+            atUsername: s.credentials?.atUsername || "",
+            atApiKey: s.credentials?.atApiKey || "",
+            atSenderId: s.credentials?.atSenderId || "",
+            darajaConsumerKey: s.credentials?.darajaConsumerKey || "",
+            darajaConsumerSecret: s.credentials?.darajaConsumerSecret || "",
+            darajaShortCode: s.credentials?.darajaShortCode || "",
+            darajaInitiatorName: s.credentials?.darajaInitiatorName || "",
           });
         }
 
@@ -105,8 +140,8 @@ export default function PlatformSettingsPage() {
     load();
   }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!tenantSlug) {
       setError("Tenant not loaded yet. Please wait.");
       return;
@@ -122,6 +157,22 @@ export default function PlatformSettingsPage() {
           baseCurrency: formData.baseCurrency,
           defaultPointValue: formData.defaultPointValue,
           pointExpiryMonths: parseInt(formData.pointExpiryMonths),
+          
+          defaultCanPurchase: formData.defaultCanPurchase,
+          defaultCanEarnPoints: formData.defaultCanEarnPoints,
+          defaultCanRedeemPoints: formData.defaultCanRedeemPoints,
+          defaultCanBankPoints: formData.defaultCanBankPoints,
+          defaultCanTransferPoints: formData.defaultCanTransferPoints,
+
+          maxFailedRedemptionsPerHour: formData.maxFailedRedemptionsPerHour,
+          requireMfaForRedemption: formData.requireMfaForRedemption,
+          redemptionVelocityCheckMinutes: formData.redemptionVelocityCheckMinutes,
+          maxPointsEarnedPerDay: formData.maxPointsEarnedPerDay,
+
+          brandPrimaryColor: formData.brandPrimaryColor,
+          brandLogoUrl: formData.brandLogoUrl,
+          smsSenderId: formData.smsSenderId,
+
           credentials: {
             atUsername: formData.atUsername,
             atApiKey: formData.atApiKey,
@@ -159,7 +210,7 @@ export default function PlatformSettingsPage() {
 
   return (
     <div className="mx-auto max-w-[1200px] px-4 pb-12 sm:px-6 lg:px-8">
-      {/* ── Header & Breadcrumbs ────────────────────────────────────────────── */}
+      {/* ── Header ────────────────────────────────────────────────────────── */}
       <div className="mb-8 pt-6">
         <nav className="mb-2 flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
           <Link href="/overview" className="hover:text-brand-600 transition-colors">
@@ -176,12 +227,12 @@ export default function PlatformSettingsPage() {
               Platform Configurations
             </h1>
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              Manage core tenant rules for loyalty programs, currency, and point behaviours.
+              Manage core tenant rules for loyalty programs, security, and branding.
             </p>
           </div>
           <div className="flex items-center gap-3">
             <button
-              onClick={handleSubmit}
+              onClick={() => handleSubmit()}
               disabled={isSubmitting}
               className="inline-flex items-center justify-center rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 disabled:opacity-60 transition-colors"
             >
@@ -204,53 +255,34 @@ export default function PlatformSettingsPage() {
       )}
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1fr_320px]">
-        {/* ── Left Column: Form ────────────────────────────────────────────── */}
-        <form onSubmit={handleSubmit} className="space-y-6">
-
-          <LocalFormSection
-            title="Finance Setup"
-            description="Tenant base currency and limits"
-          >
+        <div className="space-y-6">
+          {/* ── Finance & Core ── */}
+          <LocalFormSection title="Finance & Core Setup" description="Primary operating country and currency">
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-              <Field label="Country" hint="Default tenant operating country">
+              <Field label="Country">
                 <ModernSelect
-                  options={countriesList.map((c) => ({
-                    value: c.id,
-                    label: `${c.name} (${c.code})`,
-                  }))}
+                  options={countriesList.map((c) => ({ value: c.id, label: `${c.name} (${c.code})` }))}
                   value={formData.countryId}
                   onChange={(val) => setFormData({ ...formData, countryId: val })}
                   placeholder="Select a country"
                 />
               </Field>
-              <Field label="Base Currency" hint="Primary operating currency">
+              <Field label="Base Currency">
                 <ModernSelect
-                  options={currenciesList.map((c) => ({
-                    value: c.code,
-                    label: `${c.symbol} — ${c.name} (${c.code})`,
-                  }))}
+                  options={currenciesList.map((c) => ({ value: c.code, label: `${c.symbol} — ${c.name} (${c.code})` }))}
                   value={formData.baseCurrency}
                   onChange={(val) => setFormData({ ...formData, baseCurrency: val })}
                   placeholder="Select currency"
                 />
               </Field>
-            </div>
-          </LocalFormSection>
-
-          <LocalFormSection
-            title="Loyalty Engine Rules"
-            description="Global parameters for points and engagement"
-          >
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-              <Field label="Default Point Value (KES)" hint="Currency value in fiat for each point">
+              <Field label="Default Point Value (KES)" hint="Value in fiat for each point earned">
                 <LocalTextInput
-                  type="number"
-                  step="0.01"
+                  type="number" step="0.01"
                   value={formData.defaultPointValue}
                   onChange={(e) => setFormData({ ...formData, defaultPointValue: e.target.value })}
                 />
               </Field>
-              <Field label="Point Expiry (Months)" hint="How long points live before burning">
+              <Field label="Point Expiry (Months)" hint="Points expire after this duration">
                 <LocalTextInput
                   type="number"
                   value={formData.pointExpiryMonths}
@@ -260,80 +292,119 @@ export default function PlatformSettingsPage() {
             </div>
           </LocalFormSection>
 
-          <LocalFormSection
-            title="Africa's Talking Credentials"
-            description="Required for USSD and SMS onboarding"
-          >
+          {/* ── Consumer Controls ── */}
+          <LocalFormSection title="Consumer Permissions" description="Global toggles for consumer actions">
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-              <Field label="AT Username" hint="Usually 'sandbox' for testing">
+              <div className="flex items-center gap-3">
+                <Checkbox checked={formData.defaultCanEarnPoints} onChange={(val) => setFormData({ ...formData, defaultCanEarnPoints: val })} />
+                <span className="text-sm text-gray-700 dark:text-gray-300">Allow Earning Points</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <Checkbox checked={formData.defaultCanRedeemPoints} onChange={(val) => setFormData({ ...formData, defaultCanRedeemPoints: val })} />
+                <span className="text-sm text-gray-700 dark:text-gray-300">Allow Point Redemptions</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <Checkbox checked={formData.defaultCanBankPoints} onChange={(val) => setFormData({ ...formData, defaultCanBankPoints: val })} />
+                <span className="text-sm text-gray-700 dark:text-gray-300">Enable Point Banking</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <Checkbox checked={formData.defaultCanTransferPoints} onChange={(val) => setFormData({ ...formData, defaultCanTransferPoints: val })} />
+                <span className="text-sm text-gray-700 dark:text-gray-300">Enable Peer-to-Peer Transfers</span>
+              </div>
+            </div>
+          </LocalFormSection>
+
+          {/* ── Fraud & Security ── */}
+          <LocalFormSection title="Fraud & Security" description="Rules to prevent system abuse">
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+              <Field label="Max Failed Redemptions / Hour">
                 <LocalTextInput
-                  value={formData.atUsername}
-                  onChange={(e) => setFormData({ ...formData, atUsername: e.target.value })}
-                  placeholder="e.g. sandbox"
+                  type="number"
+                  value={formData.maxFailedRedemptionsPerHour}
+                  onChange={(e) => setFormData({ ...formData, maxFailedRedemptionsPerHour: parseInt(e.target.value) })}
                 />
+              </Field>
+              <Field label="Max Points Earned Per Day">
+                <LocalTextInput
+                  type="number"
+                  value={formData.maxPointsEarnedPerDay}
+                  onChange={(e) => setFormData({ ...formData, maxPointsEarnedPerDay: e.target.value })}
+                />
+              </Field>
+              <div className="flex items-center gap-3 pt-6">
+                <Checkbox checked={formData.requireMfaForRedemption} onChange={(val) => setFormData({ ...formData, requireMfaForRedemption: val })} />
+                <span className="text-sm text-gray-700 dark:text-gray-300">Require MFA for Redemptions</span>
+              </div>
+            </div>
+          </LocalFormSection>
+
+          {/* ── Branding ── */}
+          <LocalFormSection title="Branding & Assets" description="Customize the look and feel of your portal">
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+              <Field label="Brand Primary Color">
+                <div className="flex gap-2">
+                  <input
+                    type="color"
+                    className="h-10 w-12 rounded border border-gray-300 dark:border-white/10"
+                    value={formData.brandPrimaryColor}
+                    onChange={(e) => setFormData({ ...formData, brandPrimaryColor: e.target.value })}
+                  />
+                  <LocalTextInput
+                    value={formData.brandPrimaryColor}
+                    onChange={(e) => setFormData({ ...formData, brandPrimaryColor: e.target.value })}
+                  />
+                </div>
+              </Field>
+              <Field label="SMS Sender ID" hint="Used for outbound SMS alerts">
+                <LocalTextInput
+                  value={formData.smsSenderId}
+                  onChange={(e) => setFormData({ ...formData, smsSenderId: e.target.value })}
+                  placeholder="e.g. TUZOHUB"
+                />
+              </Field>
+              <Field label="Logo URL" hint="Direct link to your organization logo">
+                <LocalTextInput
+                  value={formData.brandLogoUrl}
+                  onChange={(e) => setFormData({ ...formData, brandLogoUrl: e.target.value })}
+                  placeholder="https://..."
+                />
+              </Field>
+            </div>
+          </LocalFormSection>
+
+          {/* ── Integration Credentials ── */}
+          <LocalFormSection title="External Integrations" description="Credentials for Africa's Talking and M-Pesa">
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+              <Field label="AT Username">
+                <LocalTextInput value={formData.atUsername} onChange={(e) => setFormData({ ...formData, atUsername: e.target.value })} />
               </Field>
               <Field label="AT API Key">
-                <LocalTextInput
-                  type="password"
-                  value={formData.atApiKey}
-                  onChange={(e) => setFormData({ ...formData, atApiKey: e.target.value })}
-                  placeholder="atsk_..."
-                />
+                <LocalTextInput type="password" value={formData.atApiKey} onChange={(e) => setFormData({ ...formData, atApiKey: e.target.value })} />
               </Field>
-              <Field label="AT Sender ID" hint="Your Short Code or Alpha-numeric ID">
-                <LocalTextInput
-                  value={formData.atSenderId}
-                  onChange={(e) => setFormData({ ...formData, atSenderId: e.target.value })}
-                  placeholder="e.g. 23456"
-                />
+              <Field label="M-Pesa Consumer Key">
+                <LocalTextInput value={formData.darajaConsumerKey} onChange={(e) => setFormData({ ...formData, darajaConsumerKey: e.target.value })} />
+              </Field>
+              <Field label="M-Pesa Consumer Secret">
+                <LocalTextInput type="password" value={formData.darajaConsumerSecret} onChange={(e) => setFormData({ ...formData, darajaConsumerSecret: e.target.value })} />
               </Field>
             </div>
           </LocalFormSection>
+        </div>
 
-          <LocalFormSection
-            title="Safaricom Daraja (M-Pesa)"
-            description="B2C Payout credentials for automated rewards"
-          >
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-              <Field label="Consumer Key">
-                <LocalTextInput
-                  value={formData.darajaConsumerKey}
-                  onChange={(e) => setFormData({ ...formData, darajaConsumerKey: e.target.value })}
-                />
-              </Field>
-              <Field label="Consumer Secret">
-                <LocalTextInput
-                  type="password"
-                  value={formData.darajaConsumerSecret}
-                  onChange={(e) => setFormData({ ...formData, darajaConsumerSecret: e.target.value })}
-                />
-              </Field>
-              <Field label="B2C Short Code">
-                <LocalTextInput
-                  value={formData.darajaShortCode}
-                  onChange={(e) => setFormData({ ...formData, darajaShortCode: e.target.value })}
-                />
-              </Field>
-              <Field label="Initiator Name">
-                <LocalTextInput
-                  value={formData.darajaInitiatorName}
-                  onChange={(e) => setFormData({ ...formData, darajaInitiatorName: e.target.value })}
-                />
-              </Field>
-            </div>
-          </LocalFormSection>
-        </form>
-
-        {/* ── Right Column: Sidebar ────────────────────────────────────────── */}
+        {/* ── Right Column ── */}
         <div className="space-y-6">
           <div className="rounded-lg bg-gray-900 p-6 text-white shadow-sm dark:bg-[#121212] dark:border dark:border-white/10">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-brand-400">
-              Impact Zone
-            </h3>
-            <p className="mt-2 text-lg font-medium">Global Rule Updates</p>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-brand-400">Impact Zone</h3>
+            <p className="mt-2 text-lg font-medium">Platform-Wide Rules</p>
             <p className="mt-2 text-sm leading-relaxed text-gray-400">
-              Changes applied here will immediately affect point accrual rates and expiry CRON jobs. Be careful when updating point values in production.
+              Changes applied here immediately affect consumer behavior, point accrual, and redemption flows across all your branches and regions.
             </p>
+            <div className="mt-6 pt-6 border-t border-white/10">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-400">Tenant Slug:</span>
+                <span className="font-mono text-brand-400">{tenantSlug}</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>

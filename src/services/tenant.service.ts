@@ -54,18 +54,40 @@ export class TenantService {
 
     const tenant = tenantRecords[0];
 
-    // Upsert tenant settings
-    const existingSettings = await tx.select().from(tenantSettings).where(eq(tenantSettings.tenantId, tenant.id)).limit(1);
+    // Split updates between 'tenants' table and 'tenant_settings' table
+    const tenantFields = ["baseCurrency", "defaultPointValue", "pointExpiryMonths", "countryId", "name", "email"];
+    const tenantUpdates: any = {};
+    const settingsUpdates: any = {};
 
-    if (existingSettings.length > 0) {
-      return await tx.update(tenantSettings)
-        .set({ ...updates, updatedAt: new Date() })
-        .where(eq(tenantSettings.tenantId, tenant.id))
-        .returning();
-    } else {
-      return await tx.insert(tenantSettings)
-        .values({ tenantId: tenant.id, ...updates })
-        .returning();
+    Object.keys(updates).forEach(key => {
+      if (tenantFields.includes(key)) {
+        tenantUpdates[key] = updates[key];
+      } else {
+        settingsUpdates[key] = updates[key];
+      }
+    });
+
+    // 1. Update tenants table if there are changes
+    if (Object.keys(tenantUpdates).length > 0) {
+      await tx.update(tenants)
+        .set(tenantUpdates)
+        .where(eq(tenants.id, tenant.id));
     }
+
+    // 2. Upsert tenant_settings table
+    if (Object.keys(settingsUpdates).length > 0) {
+      const existingSettings = await tx.select().from(tenantSettings).where(eq(tenantSettings.tenantId, tenant.id)).limit(1);
+      
+      if (existingSettings.length > 0) {
+        await tx.update(tenantSettings)
+          .set({ ...settingsUpdates, updatedAt: new Date() })
+          .where(eq(tenantSettings.tenantId, tenant.id));
+      } else {
+        await tx.insert(tenantSettings)
+          .values({ tenantId: tenant.id, ...settingsUpdates });
+      }
+    }
+
+    return { success: true };
   }
 }

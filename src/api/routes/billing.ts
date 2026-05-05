@@ -7,6 +7,11 @@ const app = new Hono<{ Variables: { user: any } }>();
 app.get("/invoices", async (c) => {
   const user = c.get("user");
   try {
+    if (user.role === "SYSTEM_ADMIN") {
+      const result = await BillingService.getAllInvoices();
+      return c.json({ success: true, data: result });
+    }
+    
     const result = await withScopedDb(user.userId, user.role || "authenticated", async (tx) => {
       return await BillingService.getInvoices(user.tenantId, tx);
     });

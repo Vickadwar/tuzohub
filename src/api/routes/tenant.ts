@@ -66,9 +66,49 @@ app.get("/:slug", async (c) => {
 
 // PUT /api/tenants/:slug/settings
 const updateSettingsSchema = z.object({
+  // Base tenant fields
   baseCurrency: z.string().length(3).optional(),
   defaultPointValue: z.string().optional(),
   pointExpiryMonths: z.number().int().optional(),
+
+  // Redemption settings
+  redemptionRequiresApproval: z.boolean().optional(),
+  redemptionMinPoints: z.string().optional(),
+  redemptionMaxPerDay: z.string().optional(),
+  redemptionMaxPerWeek: z.string().optional(),
+  redemptionMaxPerMonth: z.string().optional(),
+  redemptionTimeWindowMinutes: z.number().int().optional(),
+
+  // Banking & Expiry
+  pointExpiryEnabled: z.boolean().optional(),
+  pointExpiryMonthsGlobal: z.number().int().optional(),
+  pointRolloverEnabled: z.boolean().optional(),
+  rolloverMaxPercentage: z.number().int().optional(),
+
+  // Consumer controls
+  defaultCanPurchase: z.boolean().optional(),
+  defaultCanEarnPoints: z.boolean().optional(),
+  defaultCanRedeemPoints: z.boolean().optional(),
+  defaultCanBankPoints: z.boolean().optional(),
+  defaultCanTransferPoints: z.boolean().optional(),
+
+  // Fraud & Security
+  maxFailedRedemptionsPerHour: z.number().int().optional(),
+  requireMfaForRedemption: z.boolean().optional(),
+  redemptionVelocityCheckMinutes: z.number().int().optional(),
+  maxPointsEarnedPerDay: z.string().optional(),
+
+  // Branding
+  brandPrimaryColor: z.string().optional(),
+  brandLogoUrl: z.string().optional(),
+  smsSenderId: z.string().optional(),
+  emailFooterHtml: z.string().optional(),
+
+  // Compliance
+  auditLogRetentionDays: z.number().int().optional(),
+  consumerDataRetentionDays: z.number().int().optional(),
+
+  // External Credentials
   credentials: z.record(z.string(), z.any()).optional(),
 });
 
@@ -93,4 +133,3 @@ app.put("/:slug/settings", zValidator("json", updateSettingsSchema), async (c) =
 });
 
 export default app;
-

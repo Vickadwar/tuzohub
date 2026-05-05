@@ -51,4 +51,33 @@ app.post("/registrations/:id/decline", async (c) => {
   }
 });
 
+app.get("/tenants", async (c) => {
+  try {
+    const data = await SystemService.getAllTenants();
+    return c.json({ success: true, data });
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+app.post("/registrations/:id/suspend", async (c) => {
+  const id = c.req.param("id");
+  try {
+    const data = await SystemService.suspendTenant(id);
+    return c.json({ success: true, data });
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 400);
+  }
+});
+
+app.post("/registrations/:id/activate", async (c) => {
+  const id = c.req.param("id");
+  try {
+    const data = await SystemService.activateTenant(id);
+    return c.json({ success: true, data });
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 400);
+  }
+});
+
 export default app;

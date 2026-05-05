@@ -61,4 +61,13 @@ export class BillingService {
   static async getInvoices(tenantId: string, tx: any = db) {
     return await tx.select().from(invoices).where(eq(invoices.tenantId, tenantId));
   }
+
+  static async getAllInvoices(tx: any = db) {
+    return await tx.query.invoices.findMany({
+      with: {
+        tenant: true
+      },
+      orderBy: sql`created_at DESC`
+    });
+  }
 }

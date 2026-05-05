@@ -140,6 +140,36 @@ export class SystemService {
   }
 
   /**
+   * Get all tenants (for the Tenant Management page)
+   */
+  static async getAllTenants() {
+    return await db.query.tenants.findMany({
+      with: { country: true },
+      orderBy: sql`created_at DESC`,
+    });
+  }
+
+  /**
+   * Suspend a tenant
+   */
+  static async suspendTenant(tenantId: string) {
+    return await db.update(tenants)
+      .set({ status: "suspended", isActive: false, updatedAt: new Date() })
+      .where(eq(tenants.id, tenantId))
+      .returning();
+  }
+
+  /**
+   * Reactivate a suspended tenant
+   */
+  static async activateTenant(tenantId: string) {
+    return await db.update(tenants)
+      .set({ status: "active", isActive: true, updatedAt: new Date() })
+      .where(eq(tenants.id, tenantId))
+      .returning();
+  }
+
+  /**
    * Get list of countries for registration
    */
   static async getCountries() {
@@ -152,13 +182,21 @@ export class SystemService {
       activeTenants,
       pendingRegistrations,
       totalPoints,
-      totalConsumers
+      totalConsumers,
+      tenantDist
     ] = await Promise.all([
       db.select({ count: sql`count(*)` }).from(tenants),
       db.select({ count: sql`count(*)` }).from(tenants).where(eq(tenants.status, "active")),
       db.select({ count: sql`count(*)` }).from(tenants).where(eq(tenants.status, "pending")),
       db.select({ total: sql`sum(points_balance::numeric)` }).from(wallets),
       db.select({ count: sql`count(*)` }).from(consumers),
+      db.select({ 
+        tenantName: tenants.name, 
+        points: sql`sum(points_balance::numeric)` 
+      })
+      .from(wallets)
+      .innerJoin(tenants, eq(wallets.tenantId, tenants.id))
+      .groupBy(tenants.name)
     ]);
 
     return {
@@ -167,6 +205,10 @@ export class SystemService {
       pendingRegistrations: Number(pendingRegistrations[0]?.count || 0),
       globalPointsCirculation: totalPoints[0]?.total || "0",
       totalConsumers: Number(totalConsumers[0]?.count || 0),
+      tenantDistribution: tenantDist.map(d => ({
+        name: d.tenantName,
+        value: Number(d.points || 0)
+      }))
     };
   }
 }
