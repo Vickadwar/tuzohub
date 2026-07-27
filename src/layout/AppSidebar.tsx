@@ -120,7 +120,7 @@ const AppSidebar: React.FC = () => {
   const isOpen = isExpanded || isHovered || isMobileOpen;
 
   const filteredNavItems = navItems.filter(item => {
-    if (loading) return !item.roles;
+    if (loading) return true;
     if (!item.roles) return true;
     return user?.role && item.roles.includes(user.role);
   });

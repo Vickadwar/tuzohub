@@ -43,7 +43,7 @@ export default function OverviewMetrics() {
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-2 md:gap-6">
       {/* Metric 1: Consumers */}
-      <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
+      <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
         <div className="flex items-center justify-center w-12 h-12 bg-brand-50 text-brand-500 rounded-xl dark:bg-brand-500/10 dark:text-brand-400">
           <GroupIcon className="size-6" />
         </div>
@@ -64,7 +64,7 @@ export default function OverviewMetrics() {
       </div>
 
       {/* Metric 2: Points Issued */}
-      <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
+      <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
         <div className="flex items-center justify-center w-12 h-12 bg-blue-light-50 text-blue-light-600 rounded-xl dark:bg-blue-light-500/10 dark:text-blue-light-400">
           <BoxIconLine className="size-6" />
         </div>
@@ -85,7 +85,7 @@ export default function OverviewMetrics() {
       </div>
 
       {/* Metric 3: Active Campaigns */}
-      <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
+      <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
         <div className="flex items-center justify-center w-12 h-12 bg-orange-50 text-orange-500 rounded-xl dark:bg-orange-500/10 dark:text-orange-400">
           <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" /></svg>
         </div>
@@ -105,7 +105,7 @@ export default function OverviewMetrics() {
       </div>
 
       {/* Metric 4: Pending Redemptions */}
-      <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
+      <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
         <div className="flex items-center justify-center w-12 h-12 bg-error-50 text-error-500 rounded-xl dark:bg-error-500/10 dark:text-error-400">
            <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
         </div>

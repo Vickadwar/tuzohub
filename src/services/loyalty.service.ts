@@ -243,10 +243,10 @@ export class LoyaltyService {
       .where(eq(redemptionsQueue.id, id));
 
     try {
-      // 2. Fetch Tenant Credentials
+      // 2. Fetch Tenant Credentials (gracefully handle schema not yet migrated)
       const tSettings = await db.query.tenantSettings.findFirst({
         where: eq(tenantSettings.tenantId, tenantId)
-      });
+      }).catch(() => null);
       const creds = (tSettings?.credentials || {}) as any;
 
       // 2.1 Trigger Payout (Daraja)

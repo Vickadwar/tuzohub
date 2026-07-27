@@ -286,6 +286,7 @@ export const users = pgTable("users", {
   status: varchar("status", { length: 20 }).notNull().default("active"),
   mfaEnabled: boolean("mfa_enabled").default(false),
   mfaSecret: text("mfa_secret"),
+  // requiresPasswordChange: boolean("requires_password_change").default(false), // Commented out until DB push
   metadata: jsonb("metadata").default({}),
   lastActive: timestamp("last_active", { withTimezone: true }),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),

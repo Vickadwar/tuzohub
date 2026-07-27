@@ -38,18 +38,18 @@
   --color-white: #ffffff;
   --color-black: #101828;
 
-  --color-brand-25: #f2f7f9;
-  --color-brand-50: #e0eff5;
-  --color-brand-100: #b8dbe8;
-  --color-brand-200: #88c2d8;
-  --color-brand-300: #57a8c7;
-  --color-brand-400: #3593b5;
-  --color-brand-500: #217a99;
-  --color-brand-600: #18607a;
-  --color-brand-700: #154e63;
-  --color-brand-800: #134254;
-  --color-brand-900: #123746;
-  --color-brand-950: #0a232f;
+  --color-brand-25: #f8fafe;
+  --color-brand-50: #eff2fe;
+  --color-brand-100: #e0e6fc;
+  --color-brand-200: #c8d2fa;
+  --color-brand-300: #a4b5f6;
+  --color-brand-400: #7c90ef;
+  --color-brand-500: #5c6be6;
+  --color-brand-600: #3c50e0;
+  --color-brand-700: #303ebd;
+  --color-brand-800: #29359a;
+  --color-brand-900: #26307a;
+  --color-brand-950: #171c4a;
 
   --color-blue-light-25: #f5fbff;
   --color-blue-light-50: #f0f9ff;
@@ -238,15 +238,15 @@
 
 /* ── Light sidebar utilities ─────────────────────────────── */
 @utility light-sidebar-item {
-  @apply flex items-center gap-3 w-full px-3 py-[9px] rounded-lg text-[14px] font-medium transition-all duration-150 cursor-pointer;
+  @apply relative flex items-center gap-3 w-full px-3 py-[9px] rounded-lg text-[14px] font-medium transition-all duration-150 cursor-pointer;
 }
 
 @utility light-sidebar-item-active {
-  @apply bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400;
+  @apply bg-brand-50 text-brand-700 dark:bg-brand-500/10 dark:text-brand-400 font-semibold before:absolute before:inset-y-0 before:-left-[10px] before:w-1 before:bg-brand-600 before:rounded-r-md;
 }
 
 @utility light-sidebar-item-inactive {
-  @apply text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-white/[0.04] dark:hover:text-white;
+  @apply text-gray-500 hover:bg-gray-50 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-white/[0.04] dark:hover:text-white;
 }
 
 @utility light-sidebar-sub-item {

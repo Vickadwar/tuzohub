@@ -8,6 +8,7 @@ export interface AuthContext {
   userId: string;
   tenantId: string | null;
   role: string | null;
+  requiresPasswordChange: boolean;
 }
 
 export const authMiddleware = async (c: Context, next: Next) => {

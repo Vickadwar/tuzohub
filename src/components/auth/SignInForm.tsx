@@ -35,13 +35,10 @@ export default function SignInForm() {
       if (result?.error) {
         setError(result.error);
         setLoading(false);
+      } else if (result?.success && result?.redirectUrl) {
+        window.location.assign(result.redirectUrl);
       }
-      // If successful, the server action calls redirect() which throws an error that Next.js handles
     } catch (err: any) {
-      if (err.message === "NEXT_REDIRECT") {
-        // This is expected when redirect() is called in a server action
-        return;
-      }
       setError("An unexpected error occurred. Please try again.");
       setLoading(false);
     }

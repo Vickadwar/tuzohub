@@ -1,4 +1,5 @@
 import axios from "axios";
+import { generateSecurityCredential } from "../lib/daraja-auth";
 
 export interface DarajaConfig {
   consumerKey: string;
@@ -10,6 +11,7 @@ export interface DarajaConfig {
   callbackUrl: string;
   queueTimeOutUrl: string;
   baseUrl: string; // https://sandbox.safaricom.co.ke or https://api.safaricom.co.ke
+  certificatePem?: string; // Optional custom Safaricom X509 cert
 }
 
 export class DarajaService {
@@ -19,6 +21,7 @@ export class DarajaService {
     try {
       const response = await axios.get(`${config.baseUrl}/oauth/v1/generate?grant_type=client_credentials`, {
         headers: { Authorization: `Basic ${auth}` },
+        timeout: 10000, // 10s timeout
       });
       return response.data.access_token;
     } catch (error: any) {
@@ -52,9 +55,15 @@ export class DarajaService {
 
     const accessToken = await this.getAccessToken(config);
     
+    // Dynamically encrypt security credential if plain password is supplied or credential is placeholder
+    let securityCredential = config.securityCredential;
+    if ((!securityCredential || securityCredential === "PLACEHOLDER") && config.initiatorPassword) {
+      securityCredential = generateSecurityCredential(config.initiatorPassword, config.certificatePem);
+    }
+
     const payload = {
       InitiatorName: config.initiatorName,
-      SecurityCredential: config.securityCredential,
+      SecurityCredential: securityCredential,
       CommandID: commandId,
       Amount: Math.floor(amount),
       PartyA: config.shortCode,
@@ -68,6 +77,7 @@ export class DarajaService {
     try {
       const response = await axios.post(`${config.baseUrl}/mpesa/b2c/v1/paymentrequest`, payload, {
         headers: { Authorization: `Bearer ${accessToken}` },
+        timeout: 15000, // 15s timeout for B2C request
       });
       return response.data;
     } catch (error: any) {

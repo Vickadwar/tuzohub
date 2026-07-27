@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { usePathname } from "next/navigation";
 
 interface UserProfile {
   userId: string;
@@ -57,6 +58,8 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const pathname = usePathname();
+
   useEffect(() => {
     fetchProfile();
 
@@ -68,6 +71,12 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       subscription.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    if (!user && pathname && !pathname.startsWith("/auth")) {
+      fetchProfile();
+    }
+  }, [pathname]);
 
   return (
     <UserContext.Provider value={{ user, loading, refresh: fetchProfile }}>

@@ -1,5 +1,4 @@
 "use client";
-import Image from "next/image";
 import Link from "next/link";
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -23,6 +22,13 @@ export default function UserDropdown() {
   function closeDropdown() {
     setIsOpen(false);
   }
+
+  const getInitials = (firstName?: string, lastName?: string) => {
+    if (!firstName && !lastName) return "U";
+    const f = firstName ? firstName.charAt(0).toUpperCase() : "";
+    const l = lastName ? lastName.charAt(0).toUpperCase() : "";
+    return `${f}${l}` || "U";
+  };
 
   const handleSignOut = async () => {
     try {
@@ -50,14 +56,8 @@ export default function UserDropdown() {
         onClick={toggleDropdown} 
         className="flex items-center text-gray-700 dark:text-gray-400 dropdown-toggle"
       >
-        <span className="mr-3 overflow-hidden rounded-full h-11 w-11">
-          <Image
-            width={44}
-            height={44}
-            src="/images/user/owner.jpg"
-            alt="User"
-            loading="eager"
-          />
+        <span className="mr-3 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-500/10 text-brand-600 dark:bg-brand-500/20 dark:text-brand-400 font-bold text-sm border border-brand-500/20 shadow-theme-xs">
+          {getInitials(user?.firstName, user?.lastName)}
         </span>
 
         <span className="block mr-1 font-medium text-theme-sm">{user?.firstName || "User"}</span>

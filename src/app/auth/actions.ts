@@ -2,7 +2,6 @@
 
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
@@ -30,7 +29,7 @@ export async function signIn(formData: FormData) {
     }
   );
 
-  const { error } = await supabase.auth.signInWithPassword({
+  const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password,
   });
@@ -40,7 +39,7 @@ export async function signIn(formData: FormData) {
   }
 
   // ── TENANT STATUS CHECK (Server Side) ──────────────────────────
-  const { data: { user: authUser } } = await supabase.auth.getUser();
+  const authUser = data.user;
   if (authUser) {
     const dbUser = await db.query.users.findFirst({
       where: eq(users.id, authUser.id),
@@ -49,7 +48,7 @@ export async function signIn(formData: FormData) {
 
     // Super admins bypass tenant status checks — go straight to platform
     if (dbUser?.role === "SYSTEM_ADMIN") {
-      redirect("/platform/dashboard");
+      return { success: true, redirectUrl: "/platform/dashboard" };
     }
 
     // For all other roles, enforce tenant status gates
@@ -69,8 +68,8 @@ export async function signIn(formData: FormData) {
     }
   }
 
-  // All clear — redirect to tenant dashboard
-  redirect("/overview");
+  // All clear — return redirect destination for instant browser navigation
+  return { success: true, redirectUrl: "/overview" };
 }
 
 export async function signOut() {

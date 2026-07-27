@@ -2,6 +2,8 @@ import { db } from "./index";
 import * as schema from "./schema";
 import { supabaseAdmin } from "../lib/supabase";
 import * as dotenv from "dotenv";
+import { eq, sql, and } from "drizzle-orm";
+import * as crypto from "crypto";
 
 dotenv.config();
 
@@ -12,7 +14,7 @@ async function getOrCreateAuthUser(email: string, password: string) {
   }
 
   const { data: { users }, error: listError } = await supabaseAdmin.auth.admin.listUsers();
-  const existingUser = users.find(u => u.email === email);
+  const existingUser = users.find((u: any) => u.email === email);
 
   if (existingUser) {
     console.log(`ℹ️ Auth user already exists: ${email}`);
@@ -51,7 +53,12 @@ async function main() {
       { name: "Kenya", code: "KE", dialingCode: "+254" },
     ]).onConflictDoNothing().returning();
 
-    const kenya = countriesResp.find(c => c.code === "KE");
+    let kenya = countriesResp.find(c => c.code === "KE");
+    if (!kenya) {
+      kenya = await db.query.countries.findFirst({
+        where: eq(schema.countries.code, "KE")
+      });
+    }
     if (!kenya) throw new Error("Kenya country seeding failed");
 
     // 3. Seed Global Counties (Sample)
@@ -80,12 +87,17 @@ async function main() {
       isPlatformOwner: true,
     }).onConflictDoNothing().returning();
 
-    const masterTenant = masterTenantResp[0];
+    let masterTenant: typeof masterTenantResp[0] | undefined = masterTenantResp[0];
+    if (!masterTenant) {
+      masterTenant = await db.query.tenants.findFirst({
+        where: eq(schema.tenants.slug, "tuzohub")
+      });
+    }
     if (!masterTenant) throw new Error("Master tenant creation failed");
 
     // 5. Create System Admin
     const SYSTEM_ADMIN_EMAIL = "admin@tuzohub.com";
-    const systemAdminAuthId = await getOrCreateAuthUser(SYSTEM_ADMIN_EMAIL, "TuzoHub2026!");
+    const systemAdminAuthId = await getOrCreateAuthUser(SYSTEM_ADMIN_EMAIL, "TuzoHub1.$");
     
     if (systemAdminAuthId) {
       console.log(`👤 Syncing System Admin to DB (Email: ${SYSTEM_ADMIN_EMAIL})...`);
@@ -100,8 +112,9 @@ async function main() {
       }).onConflictDoNothing();
     }
 
-    // 6. Create JOPI NY PAINTS Tenant
-    console.log("🏢 Creating Jopiny Paints Tenant...");
+    if (process.env.NODE_ENV !== "production") {
+      // 6. Create JOPI NY PAINTS Tenant
+      console.log("🏢 Creating Jopiny Paints Tenant (Development Only)...");
     const jopinyTenantResp = await db.insert(schema.tenants).values({
       name: "Jopiny Paints",
       slug: "jopiny-paints",
@@ -115,7 +128,12 @@ async function main() {
       isPlatformOwner: false,
     }).onConflictDoNothing().returning();
 
-    const jopinyTenant = jopinyTenantResp[0];
+    let jopinyTenant: typeof jopinyTenantResp[0] | undefined = jopinyTenantResp[0];
+    if (!jopinyTenant) {
+      jopinyTenant = await db.query.tenants.findFirst({
+        where: eq(schema.tenants.slug, "jopiny-paints")
+      });
+    }
     if (jopinyTenant) {
       const JOPINY_ADMIN_EMAIL = "admin@jopinypaints.com";
       const jopinyAdminAuthId = await getOrCreateAuthUser(JOPINY_ADMIN_EMAIL, "Jopiny2026!");
@@ -186,10 +204,154 @@ async function main() {
       }
     }
 
-    console.log("✅ Seeding completed successfully!");
-    console.log("\n🚀 SYSTEM READY:");
-    console.log("1. System Admin: admin@tuzohub.com / TuzoHub2026!");
-    console.log("2. Jopiny Admin: admin@jopinypaints.com / Jopiny2026!");
+    // 11. Create GAMMA COATINGS Tenant
+    console.log("🏢 Creating Gamma Coatings Tenant...");
+    const gammaTenantResp = await db.insert(schema.tenants).values({
+      name: "Gamma Coatings",
+      slug: "gamma-coatings",
+      email: "loyalty@gammacoatings.com",
+      countryId: kenya.id,
+      baseCurrency: "KES",
+      defaultPointValue: "1.00",
+      pointExpiryMonths: 24,
+      status: "active",
+      plan: "professional",
+      isPlatformOwner: false,
+    }).onConflictDoNothing().returning();
+
+    const gammaTenant = gammaTenantResp[0] || await db.query.tenants.findFirst({
+      where: eq(schema.tenants.slug, "gamma-coatings")
+    });
+
+    if (gammaTenant) {
+      const GAMMA_ADMIN_EMAIL = "admin@gammacoatings.com";
+      const gammaAdminAuthId = await getOrCreateAuthUser(GAMMA_ADMIN_EMAIL, "Gamma2026!");
+
+      if (gammaAdminAuthId) {
+        console.log(`👤 Syncing Tenant Admin for Gamma Coatings to DB (Email: ${GAMMA_ADMIN_EMAIL})...`);
+        await db.insert(schema.users).values({
+          id: gammaAdminAuthId,
+          tenantId: gammaTenant.id,
+          email: GAMMA_ADMIN_EMAIL,
+          firstName: "Gamma",
+          lastName: "Admin",
+          role: "TENANT_ADMIN",
+          status: "active",
+        }).onConflictDoNothing();
+      }
+
+      console.log("⚙️ Inserting Gamma Coatings Settings...");
+      await db.insert(schema.tenantSettings).values({
+        tenantId: gammaTenant.id,
+        credentials: {
+          smsProvider: "bongasms",
+          bongaApiClientID: "254",
+          bongaApiKey: "BongaApiKey_SAMPLE_KEY",
+          bongaApiSecret: "BongaApiSecret_SAMPLE_SECRET",
+          bongaServiceID: "1",
+          atUsername: "sandbox",
+          atApiKey: "AtApiKey_PLACEHOLDER",
+          atSenderId: "GammaCoatings",
+          darBaseUrl: "https://sandbox.safaricom.co.ke",
+          darajaConsumerKey: "DarajaConsumerKey_PLACEHOLDER",
+          darajaConsumerSecret: "DarajaConsumerSecret_PLACEHOLDER",
+          darajaShortCode: "600000",
+          darajaInitiatorName: "TUZO_INIT",
+          darajaInitiatorPassword: "Password123",
+          darajaSecurityCredential: "CREDENTIAL_HASH",
+        },
+      }).onConflictDoNothing();
+
+      console.log("📍 Seeding Gamma Coatings Regions...");
+      const regionNames = ["Nairobi", "Central", "Coast", "Eastern", "North Eastern", "Nyanza", "Rift Valley", "Western"];
+      const insertedRegions = [];
+      for (const name of regionNames) {
+        const [r] = await db.insert(schema.regions).values({
+          tenantId: gammaTenant.id,
+          countryId: kenya.id,
+          name,
+        }).onConflictDoNothing().returning();
+        if (r) {
+          insertedRegions.push(r);
+        } else {
+          const existingReg = await db.query.regions.findFirst({
+            where: and(eq(schema.regions.tenantId, gammaTenant.id), eq(schema.regions.name, name))
+          });
+          if (existingReg) insertedRegions.push(existingReg);
+        }
+      }
+
+      const rvRegion = insertedRegions.find(r => r.name === "Rift Valley");
+      if (rvRegion) {
+        console.log("📍 Seeding Gamma Coatings Rift Valley Towns...");
+        const rvTowns = ["Nakuru", "Eldoret", "Naivasha", "Kitale", "Kericho"];
+        for (const name of rvTowns) {
+          await db.insert(schema.towns).values({
+            tenantId: gammaTenant.id,
+            regionId: rvRegion.id,
+            name,
+          }).onConflictDoNothing();
+        }
+      }
+
+      console.log("📦 Seeding Gamma Coatings Products...");
+      const [gammaProduct] = await db.insert(schema.products).values({
+        tenantId: gammaTenant.id,
+        sku: "GAMMA-SILK-4L",
+        name: "Gamma Silk Paint 4L",
+        category: "Paints",
+        pointsPerUnit: 50,
+        price: "50.00",
+        isActive: true,
+      }).onConflictDoNothing().returning();
+
+      const resolvedProduct = gammaProduct || await db.query.products.findFirst({
+        where: and(eq(schema.products.tenantId, gammaTenant.id), eq(schema.products.sku, "GAMMA-SILK-4L"))
+      });
+
+      if (resolvedProduct) {
+        console.log("🎫 Seeding Gamma Coatings Voucher Batch & Vouchers...");
+        const [batch] = await db.insert(schema.voucherBatches).values({
+          tenantId: gammaTenant.id,
+          productId: resolvedProduct.id,
+          batchNumber: "GAMMA-BATCH-001",
+          quantity: 10,
+          generated: 10,
+          isActivated: true,
+          activatedAt: new Date(),
+        }).onConflictDoNothing().returning();
+
+        const resolvedBatch = batch || await db.query.voucherBatches.findFirst({
+          where: and(eq(schema.voucherBatches.tenantId, gammaTenant.id), eq(schema.voucherBatches.batchNumber, "GAMMA-BATCH-001"))
+        });
+
+        if (resolvedBatch) {
+          const testVouchers = [
+            { code: "G-ACTIVE-1", status: "ACTIVE" as const },
+            { code: "G-ACTIVE-2", status: "ACTIVE" as const },
+            { code: "G-USED-1", status: "REDEEMED" as const },
+          ];
+
+          for (const item of testVouchers) {
+            const secureCodeHash = crypto.createHash("sha256").update(item.code).digest("hex");
+            await db.insert(schema.vouchers).values({
+              batchId: resolvedBatch.id,
+              serialNumber: "SN-" + item.code,
+              secureCodeHash,
+              status: item.status,
+            }).onConflictDoNothing();
+          }
+        }
+      }
+    }
+  } // <-- Closing the process.env.NODE_ENV check
+
+  console.log("✅ Seeding completed successfully!");
+  console.log("\n🚀 SYSTEM READY:");
+    console.log("1. System Admin: admin@tuzohub.com / TuzoHub1.$");
+    if (process.env.NODE_ENV !== "production") {
+      console.log("2. Jopiny Admin: admin@jopinypaints.com / Jopiny2026!");
+    }
     console.log("\n💡 You can now login to the dashboard immediately.");
   } catch (error) {
     console.error("❌ Seeding failed:", error);

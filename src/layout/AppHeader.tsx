@@ -18,7 +18,7 @@ const AppHeader: React.FC = () => {
   }, [toggleSidebar, toggleMobileSidebar]);
 
   return (
-    <header className="sticky top-0 z-40 w-full h-12 bg-white/80 dark:bg-gray-950/80 backdrop-blur-md border-b border-gray-200/60 dark:border-white/[0.06] flex items-center px-3 lg:px-5 gap-3 shrink-0">
+    <header className="sticky top-0 z-40 w-full h-[80px] bg-white dark:bg-gray-900 shadow-sm border-b border-gray-200 dark:border-gray-800 flex items-center px-4 lg:px-8 gap-4 shrink-0">
       {/* Sidebar Toggle */}
       <button
         onClick={handleToggle}

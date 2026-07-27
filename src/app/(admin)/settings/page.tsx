@@ -5,6 +5,7 @@ import Link from "next/link";
 import { authenticatedFetch } from "@/hooks/useApi";
 import ModernSelect from "@/components/ui/ModernSelect";
 import Checkbox from "@/components/form/input/Checkbox";
+import IntegrationsManager from "@/components/admin/settings/IntegrationsManager";
 
 // ─── Reusable Field Component ────────────────────────────────────────
 function Field({ label, hint, action, children }: { label: string; hint?: React.ReactNode; action?: React.ReactNode; children: React.ReactNode }) {
@@ -44,6 +45,7 @@ function LocalTextInput({ className, ...props }: React.InputHTMLAttributes<HTMLI
 
 export default function PlatformSettingsPage() {
   const [tenantSlug, setTenantSlug] = useState("");
+  const [tenantId, setTenantId] = useState("");
   const [formData, setFormData] = useState({
     countryId: "",
     baseCurrency: "",
@@ -69,13 +71,7 @@ export default function PlatformSettingsPage() {
     smsSenderId: "",
 
     // Credentials
-    atUsername: "",
-    atApiKey: "",
-    atSenderId: "",
-    darajaConsumerKey: "",
-    darajaConsumerSecret: "",
-    darajaShortCode: "",
-    darajaInitiatorName: "",
+    credentials: {} as Record<string, any>,
   });
   const [countriesList, setCountriesList] = useState<{ id: string; name: string; code: string }[]>([]);
   const [currenciesList, setCurrenciesList] = useState<{ code: string; name: string; symbol: string }[]>([]);
@@ -98,6 +94,7 @@ export default function PlatformSettingsPage() {
           const t = tenantRes.data;
           const s = t.settings || {};
           setTenantSlug(t.slug || "");
+          setTenantId(t.id || "");
           setFormData({
             countryId: t.countryId || "",
             baseCurrency: t.baseCurrency || "",
@@ -119,13 +116,7 @@ export default function PlatformSettingsPage() {
             brandLogoUrl: s.brandLogoUrl || "",
             smsSenderId: s.smsSenderId || "",
 
-            atUsername: s.credentials?.atUsername || "",
-            atApiKey: s.credentials?.atApiKey || "",
-            atSenderId: s.credentials?.atSenderId || "",
-            darajaConsumerKey: s.credentials?.darajaConsumerKey || "",
-            darajaConsumerSecret: s.credentials?.darajaConsumerSecret || "",
-            darajaShortCode: s.credentials?.darajaShortCode || "",
-            darajaInitiatorName: s.credentials?.darajaInitiatorName || "",
+            credentials: s.credentials || {},
           });
         }
 
@@ -173,15 +164,7 @@ export default function PlatformSettingsPage() {
           brandLogoUrl: formData.brandLogoUrl,
           smsSenderId: formData.smsSenderId,
 
-          credentials: {
-            atUsername: formData.atUsername,
-            atApiKey: formData.atApiKey,
-            atSenderId: formData.atSenderId,
-            darajaConsumerKey: formData.darajaConsumerKey,
-            darajaConsumerSecret: formData.darajaConsumerSecret,
-            darajaShortCode: formData.darajaShortCode,
-            darajaInitiatorName: formData.darajaInitiatorName,
-          }
+          credentials: formData.credentials || {},
         }),
       });
 
@@ -372,23 +355,13 @@ export default function PlatformSettingsPage() {
             </div>
           </LocalFormSection>
 
-          {/* ── Integration Credentials ── */}
-          <LocalFormSection title="External Integrations" description="Credentials for Africa's Talking and M-Pesa">
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-              <Field label="AT Username">
-                <LocalTextInput value={formData.atUsername} onChange={(e) => setFormData({ ...formData, atUsername: e.target.value })} />
-              </Field>
-              <Field label="AT API Key">
-                <LocalTextInput type="password" value={formData.atApiKey} onChange={(e) => setFormData({ ...formData, atApiKey: e.target.value })} />
-              </Field>
-              <Field label="M-Pesa Consumer Key">
-                <LocalTextInput value={formData.darajaConsumerKey} onChange={(e) => setFormData({ ...formData, darajaConsumerKey: e.target.value })} />
-              </Field>
-              <Field label="M-Pesa Consumer Secret">
-                <LocalTextInput type="password" value={formData.darajaConsumerSecret} onChange={(e) => setFormData({ ...formData, darajaConsumerSecret: e.target.value })} />
-              </Field>
-            </div>
-          </LocalFormSection>
+          {/* ── Enterprise Multi-Tenant Gateway & Integration Credentials ── */}
+          <IntegrationsManager
+            credentials={formData.credentials || {}}
+            onChange={(newCreds) => setFormData({ ...formData, credentials: newCreds })}
+            tenantId={tenantId}
+            tenantSlug={tenantSlug}
+          />
         </div>
 
         {/* ── Right Column ── */}

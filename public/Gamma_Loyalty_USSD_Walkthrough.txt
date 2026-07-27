@@ -1,0 +1,168 @@
+GAMMA RANGI NA CHAPAA - USSD WALKTHROUGH
+For submission to Africa's Talking
+
+=========================================================
+SCENARIO A: FIRST-TIME USER REGISTRATION (ENGLISH PATH)
+=========================================================
+Step 1: Language Selection
+* User Dials: *453*34#
+* System Checks: Phone number not in the database.
+* Screen:
+  CON Welcome to Gamma Rangi na Chapaa!
+  1. English
+  2. Kiswahili
+
+Step 2: Enter Name
+* User Enters: 1
+* Screen:
+  CON Please enter your Full Name:
+
+Step 3: ID Number
+* User Enters: [User's Name]
+* Screen:
+  CON Enter your National ID Number:
+
+Step 4: Region Selection
+* User Enters: [ID Number]
+* Screen:
+  CON Select your Region:
+  1. Nairobi
+  2. Central
+  3. Coast
+  4. Eastern
+  5. North Eastern
+  6. Nyanza
+  7. Rift Valley
+  8. Western
+
+Step 5: Town Selection (Option A: Top Commercial Hubs + Pagination)
+* User Enters: [e.g., 7 for Rift Valley]
+* Screen:
+  CON Select your Town:
+  1. Nakuru
+  2. Eldoret
+  3. Naivasha
+  4. Kitale
+  5. Kericho
+  8. Next Page
+  9. Other
+
+Step 6: Terms and Conditions
+* User Enters: [Town Choice]
+* Screen:
+  CON Do you accept the Terms & Conditions of the Gamma Loyalty Program? (T&Cs link will be sent via SMS)
+  1. Accept
+  2. Reject
+
+Step 7: Voucher Entry
+* User Enters: 1
+* Screen:
+  CON Registration successful! Enter your Gamma Voucher Number:
+
+Step 8: Final Confirmation
+* User Enters: [Voucher Number]
+* Screen:
+  END Thank you! Your voucher is being verified. You will receive an SMS with your top-up status shortly.
+
+
+=========================================================
+SCENARIO B: FIRST-TIME USER REGISTRATION (SWAHILI PATH)
+=========================================================
+Step 1: Language Selection
+* User Dials: *453*34#
+* Screen:
+  CON Welcome to Gamma Rangi na Chapaa!
+  1. English
+  2. Kiswahili
+
+Step 2: Enter Name
+* User Enters: 2
+* Screen:
+  CON Tafadhali weka Majina yako Kamili:
+
+Step 3: ID Number
+* User Enters: [User's Name]
+* Screen:
+  CON Weka nambari yako ya Kitambulisho (ID):
+
+Step 4: Region Selection
+* User Enters: [ID Number]
+* Screen:
+  CON Chagua Mkoa wako:
+  1. Nairobi
+  2. Central
+  3. Coast
+  4. Eastern
+  5. North Eastern
+  6. Nyanza
+  7. Rift Valley
+  8. Western
+
+Step 5: Town Selection (Option A: Top Commercial Hubs + Pagination)
+* User Enters: [Region Choice]
+* Screen:
+  CON Chagua Mji wako:
+  1. Nakuru
+  2. Eldoret
+  3. Naivasha
+  4. Kitale
+  5. Kericho
+  8. Ukurasa Ufuatao
+  9. Mwingine (Other)
+
+Step 6: Terms and Conditions
+* User Enters: [Town Choice]
+* Screen:
+  CON Je, unakubali Vigezo na Masharti ya Gamma Rangi na Chapaa? (Utatumiwa ujumbe mfupi)
+  1. Ndio (Accept)
+  2. Hapana (Reject)
+
+Step 7: Voucher Entry
+* User Enters: 1
+* Screen:
+  CON Umesajiliwa kikamilifu! Weka nambari ya Vocha:
+
+Step 8: Final Confirmation
+* User Enters: [Voucher Number]
+* Screen:
+  END Asante! Vocha yako inashughulikiwa. Utapokea SMS hivi punde kuthibitisha malipo yako.
+
+
+=========================================================
+SCENARIO C: RETURNING USER (ALREADY REGISTERED)
+=========================================================
+Step 1: Main Menu
+* User Dials: *453*34#
+* System Checks: Phone number exists in database.
+* Screen:
+  CON Welcome back to Gamma, [Name]! / Karibu tena [Name]!
+  1. Redeem Voucher / Weka Vocha
+  2. Exit / Ondoka
+
+Step 2: Voucher Entry
+* User Enters: 1
+* Screen:
+  CON Enter your Gamma Voucher Number: / Weka nambari ya Vocha:
+
+Step 3: Final Confirmation
+* User Enters: [Voucher Number]
+* Screen:
+  END Thank you! Your voucher is being verified. You will receive an SMS confirmation shortly. / Asante, vocha inashughulikiwa.
+
+
+=========================================================
+SYSTEM VALIDATION & SMS RESPONSES
+=========================================================
+Once the session ends, the backend system processes the voucher and triggers an SMS response to the user.
+
+1. SUCCESSFUL TOP-UP:
+SMS: "Hongera! Voucher code [Code] is valid. Ksh [Amount] has been sent to your mobile wallet. Thank you for choosing Gamma Coatings. T&Cs apply: [Link]"
+
+2. VOUCHER ALREADY USED:
+SMS: "Pole, the voucher code [Code] has already been used. Please try another valid Gamma voucher."
+
+3. INVALID VOUCHER:
+SMS: "Pole, the voucher code [Code] is invalid or not found. Please check the number and dial *453*34# to try again."
+
+4. SYSTEM PENDING/DELAY (If Float is delayed):
+SMS: "Dear [Name], your voucher [Code] has been received and is pending processing. Your wallet will be topped up shortly once confirmed."
