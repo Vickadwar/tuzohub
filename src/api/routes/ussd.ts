@@ -5,32 +5,34 @@ import { UssdService } from "../../services/ussd.service";
  * Multi-Tenant USSD Callback Handler
  *
  * Supports both GET (Olive Tree Media / Bonga USSD) and POST (Africa's Talking / Jenga)
- *
- * Register this URL in your provider dashboard:
- *   GET/POST https://yourdomain.com/api/ussd/callback?tenantId=<uuid>
- *
- * Parameter Normalization:
- *   Session ID   - session_id (Olive) or sessionId (AT)
- *   Service Code - service_code (Olive) or serviceCode (AT)
- *   Phone Number - mobile_number (Olive) or phoneNumber (AT)
- *   User Input   - message (Olive) or text (AT)
+ * Supports both /api/ussd and /api/ussd/callback endpoints.
  */
 
 const app = new Hono();
 
-// ── Olive Tree Media (Bonga USSD) GET Handler ──────────────────────────────
-app.get("/callback", async (c) => {
-  const sessionId   = c.req.query("session_id") || c.req.query("sessionId") || "";
-  const serviceCode = c.req.query("service_code") || c.req.query("serviceCode") || "";
-  const phoneNumber = c.req.query("mobile_number") || c.req.query("phoneNumber") || "";
-  const text        = c.req.query("message") || c.req.query("text") || "";
-  const tenantId    = c.req.query("tenantId");
+async function handleUssd(c: any, method: "GET" | "POST") {
+  let sessionId = "";
+  let serviceCode = "";
+  let phoneNumber = "";
+  let text = "";
 
-  if (!tenantId) {
-    return c.text("END Configuration error: Missing tenantId.", 400);
+  if (method === "GET") {
+    sessionId   = c.req.query("session_id") || c.req.query("sessionId") || "";
+    serviceCode = c.req.query("service_code") || c.req.query("serviceCode") || "";
+    phoneNumber = c.req.query("mobile_number") || c.req.query("phoneNumber") || "";
+    text        = c.req.query("message") || c.req.query("text") || "";
+  } else {
+    const body = (await c.req.parseBody().catch(() => ({}))) as Record<string, any>;
+    sessionId   = (body["sessionId"] || body["session_id"] || c.req.query("sessionId") || "") as string;
+    serviceCode = (body["serviceCode"] || body["service_code"] || c.req.query("serviceCode") || "") as string;
+    phoneNumber = (body["phoneNumber"] || body["mobile_number"] || c.req.query("phoneNumber") || "") as string;
+    text        = (body["text"] || body["message"] || c.req.query("text") || "") as string;
   }
 
-  console.log(`[USSD GET - Olive/Bonga] Session: ${sessionId}, Phone: ${phoneNumber}, Text: "${text}"`);
+  const tenantId = c.req.query("tenantId");
+  const tenantSlug = c.req.query("tenantSlug") || c.req.query("slug") || c.req.query("tenant");
+
+  console.log(`[USSD ${method}] Session: ${sessionId}, Phone: ${phoneNumber}, Code: ${serviceCode}, Text: "${text}", TenantId: ${tenantId || "none"}, TenantSlug: ${tenantSlug || "none"}`);
 
   try {
     const response = await UssdService.processRequest({
@@ -39,45 +41,25 @@ app.get("/callback", async (c) => {
       phoneNumber,
       text,
       tenantId,
+      tenantSlug,
     });
 
+    c.header("Content-Type", "text/plain");
     return c.text(response);
   } catch (err: any) {
-    console.error("[USSD GET Error]", err.message);
-    return c.text("END An error occurred. Please try again later.");
+    console.error(`[USSD ${method} Error]`, err);
+    c.header("Content-Type", "text/plain");
+    return c.text("END An internal system error occurred. Please try again later.");
   }
-});
+}
 
-// ── Africa's Talking / Jenga POST Handler ──────────────────────────────────
-app.post("/callback", async (c) => {
-  const body = (await c.req.parseBody().catch(() => ({}))) as Record<string, any>;
+// Support both root /api/ussd and /api/ussd/callback (GET and POST)
+app.get("/", (c) => handleUssd(c, "GET"));
+app.get("/callback", (c) => handleUssd(c, "GET"));
+app.get("/*", (c) => handleUssd(c, "GET"));
 
-  const sessionId   = (body["sessionId"] || body["session_id"] || "") as string;
-  const serviceCode = (body["serviceCode"] || body["service_code"] || "") as string;
-  const phoneNumber = (body["phoneNumber"] || body["mobile_number"] || "") as string;
-  const text        = (body["text"] || body["message"] || "") as string;
-  const tenantId    = c.req.query("tenantId");
-
-  if (!tenantId) {
-    return c.text("END Configuration error: Missing tenantId.", 400);
-  }
-
-  console.log(`[USSD POST - AT/Jenga] Session: ${sessionId}, Phone: ${phoneNumber}, Text: "${text}"`);
-
-  try {
-    const response = await UssdService.processRequest({
-      sessionId,
-      serviceCode,
-      phoneNumber,
-      text,
-      tenantId,
-    });
-
-    return c.text(response);
-  } catch (err: any) {
-    console.error("[USSD POST Error]", err.message);
-    return c.text("END An error occurred. Please try again later.");
-  }
-});
+app.post("/", (c) => handleUssd(c, "POST"));
+app.post("/callback", (c) => handleUssd(c, "POST"));
+app.post("/*", (c) => handleUssd(c, "POST"));
 
 export default app;

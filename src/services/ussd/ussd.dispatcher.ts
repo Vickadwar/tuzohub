@@ -35,12 +35,32 @@ export class UssdDispatcher {
 
     // 2. Fallback Safeguard: Auto-discovery via shortcode (serviceCode) lookup
     if (!resolvedTenantId && params.serviceCode) {
+      const cleanCode = params.serviceCode.replace(/[^0-9*]/g, "");
       const allSettings = await db.select().from(tenantSettings);
       for (const setting of allSettings) {
         const creds = (setting.credentials || {}) as any;
-        if (creds.ussdServiceCode === params.serviceCode || creds.serviceCode === params.serviceCode) {
+        const targetCode = (creds.ussdServiceCode || creds.serviceCode || "").replace(/[^0-9*]/g, "");
+        if (targetCode && (targetCode === cleanCode || cleanCode.includes(targetCode) || targetCode.includes(cleanCode))) {
           resolvedTenantId = setting.tenantId;
           break;
+        }
+      }
+    }
+
+    // 3. Ultimate Fallback for Staging/Testing: Default to Gamma Coatings (or first active tenant)
+    if (!resolvedTenantId) {
+      const fallbackTenant = await db.select().from(tenants)
+        .where(eq(tenants.slug, "gamma-coatings"))
+        .limit(1)
+        .then(r => r[0])
+        .catch(() => null);
+      
+      if (fallbackTenant) {
+        resolvedTenantId = fallbackTenant.id;
+      } else {
+        const firstTenant = await db.select().from(tenants).limit(1).then(r => r[0]).catch(() => null);
+        if (firstTenant) {
+          resolvedTenantId = firstTenant.id;
         }
       }
     }
