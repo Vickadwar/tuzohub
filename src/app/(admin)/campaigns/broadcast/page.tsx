@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import Badge from "@/components/ui/badge/Badge";
-import { useApi } from "@/hooks/useApi";
+import { useApi, authenticatedFetch } from "@/hooks/useApi";
 
 interface DispatchLog {
   id: string;
@@ -65,18 +65,12 @@ export default function PromoSmsBroadcastPage() {
     const now = new Date().toLocaleTimeString();
 
     try {
-      const res = await fetch("/api/sms/send-promo", {
+      const data = await authenticatedFetch("/api/sms/send-promo", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
-        },
         body: JSON.stringify({ phoneNumber, message }),
       });
 
-      const data = await res.json();
-
-      if (!res.ok || !data.success) {
+      if (!data.success) {
         throw new Error(data.error || "Failed to dispatch SMS");
       }
 
@@ -101,6 +95,7 @@ export default function PromoSmsBroadcastPage() {
       // Clear input on success
       setPhoneNumber("");
     } catch (error: any) {
+      const errorMsg = error.info?.error || error.message || "Network dispatch failure";
       setLogs((prev) => [
         {
           id: newLogId,
@@ -108,7 +103,7 @@ export default function PromoSmsBroadcastPage() {
           phoneNumber,
           message,
           status: "ERROR",
-          responseDetails: error.message || "Network dispatch failure",
+          responseDetails: errorMsg,
         },
         ...prev,
       ]);
