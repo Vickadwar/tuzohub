@@ -50,6 +50,11 @@ app.use("*", cors({
 // Public Routes
 app.route("/public", publicRoutes);
 
+// USSD, SMS & M-Pesa callbacks are PUBLIC
+app.route("/ussd", ussdRoutes);
+app.route("/sms", smsRoutes);
+app.route("/mpesa", mpesaRoutes);
+
 app.get("/health", (c) => {
   return c.json({
     status: "ok",
@@ -88,11 +93,6 @@ app.route("/organizations", organizationsRoutes);
 app.route("/transactions", transactionsRoutes);
 app.route("/system", systemRoutes);
 app.route("/billing", billingRoutes);
-
-// USSD, SMS & M-Pesa callbacks are PUBLIC
-app.route("/ussd", ussdRoutes);
-app.route("/sms", smsRoutes);
-app.route("/mpesa", mpesaRoutes);
 
 // Error Handling
 app.onError((err, c) => {

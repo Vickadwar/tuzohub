@@ -55,11 +55,14 @@ const navItems: NavItem[] = [
     path: "/consumers", 
     roles: ["TENANT_ADMIN", "MANAGER", "OPERATOR", "SYSTEM_ADMIN"] 
   },
-  { 
-    icon: <BoxCubeIcon />, 
-    name: "Campaigns", 
-    path: "/campaigns", 
-    roles: ["TENANT_ADMIN", "MANAGER", "SYSTEM_ADMIN"] 
+  {
+    icon: <BoxCubeIcon />,
+    name: "Campaigns & Marketing",
+    roles: ["TENANT_ADMIN", "MANAGER", "SYSTEM_ADMIN"],
+    subItems: [
+      { name: "Campaigns List", path: "/campaigns" },
+      { name: "Promo SMS Broadcast", path: "/campaigns/broadcast" },
+    ],
   },
   { 
     icon: <ShootingStarIcon />, 

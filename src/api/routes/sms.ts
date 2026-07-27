@@ -6,8 +6,11 @@ import { v4 as uuidv4 } from "uuid";
 import { SmsService } from "../../services/sms.service";
 import { WalletRepository } from "../../services/../db/repositories/wallet.repo";
 import { tenants } from "../../db/schema";
+import { authMiddleware } from "../middleware/auth";
+import { z } from "zod";
+import { zValidator } from "@hono/zod-validator";
 
-const app = new Hono();
+const app = new Hono<{ Variables: { user: any } }>();
 
 /**
  * Africa's Talking SMS Callback Handler
@@ -91,6 +94,44 @@ app.post("/callback", async (c) => {
   }
 
   return c.text("OK");
+});
+
+const promoSchema = z.object({
+  phoneNumber: z.string().min(9, "Valid phone number is required"),
+  message: z.string().min(1, "Message content cannot be empty"),
+  consumerId: z.string().optional(),
+});
+
+/**
+ * POST /api/sms/send-promo — Send a promotional broadcast SMS to a consumer
+ */
+app.post("/send-promo", authMiddleware, zValidator("json", promoSchema), async (c) => {
+  const user = c.get("user");
+  const { phoneNumber, message } = c.req.valid("json");
+
+  if (!user.tenantId) {
+    return c.json({ success: false, error: "No tenant associated with this user" }, 403);
+  }
+
+  try {
+    const tSettingsRecords = await db.select().from(tenantSettings).where(eq(tenantSettings.tenantId, user.tenantId)).limit(1);
+    const creds = (tSettingsRecords[0]?.credentials || {}) as any;
+
+    const result = await SmsService.sendSms({
+      config: creds,
+      to: phoneNumber,
+      message,
+    });
+
+    return c.json({
+      success: true,
+      message: "Promotional SMS broadcast dispatched successfully",
+      result,
+    });
+  } catch (error: any) {
+    console.error("Promo SMS Dispatch Error:", error);
+    return c.json({ success: false, error: error.message || "Failed to send promotional SMS" }, 500);
+  }
 });
 
 export default app;
