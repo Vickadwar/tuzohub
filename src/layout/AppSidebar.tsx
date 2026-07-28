@@ -1,4 +1,5 @@
 "use client";
+
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -35,10 +36,10 @@ const navItems: NavItem[] = [
     name: "Platform",
     roles: ["SYSTEM_ADMIN"],
     subItems: [
-      { name: "Global Dashboard", path: "/platform/dashboard" },
-      { name: "Manage Tenants", path: "/platform/tenants" },
-      { name: "Pending Registrations", path: "/admin/registrations" },
-      { name: "System Billing", path: "/platform/billing" },
+      { name: "Global dashboard", path: "/platform/dashboard" },
+      { name: "Manage tenants", path: "/platform/tenants" },
+      { name: "Pending registrations", path: "/admin/registrations" },
+      { name: "System billing", path: "/platform/billing" },
     ],
   },
   
@@ -57,16 +58,16 @@ const navItems: NavItem[] = [
   },
   {
     icon: <BoxCubeIcon />,
-    name: "Campaigns & Marketing",
+    name: "Campaigns & marketing",
     roles: ["TENANT_ADMIN", "MANAGER", "SYSTEM_ADMIN"],
     subItems: [
-      { name: "Campaigns List", path: "/campaigns" },
-      { name: "Promo SMS Broadcast", path: "/campaigns/broadcast" },
+      { name: "Campaigns list", path: "/campaigns" },
+      { name: "Promo SMS broadcast", path: "/campaigns/broadcast" },
     ],
   },
   { 
     icon: <ShootingStarIcon />, 
-    name: "Rewards Catalog", 
+    name: "Rewards catalog", 
     path: "/rewards", 
     roles: ["TENANT_ADMIN", "MANAGER", "OPERATOR", "SYSTEM_ADMIN"] 
   },
@@ -77,10 +78,10 @@ const navItems: NavItem[] = [
     icon: <BoxIconLine />,
     roles: ["TENANT_ADMIN", "MANAGER", "OPERATOR", "SYSTEM_ADMIN"],
     subItems: [
-      { name: "Product List", path: "/products" },
-      { name: "Production Batches", path: "/production" },
-      { name: "Voucher Batches", path: "/vouchers" },
-      { name: "Voucher Inventory", path: "/vouchers/list" },
+      { name: "Product list", path: "/products" },
+      { name: "Production batches", path: "/production" },
+      { name: "Voucher batches", path: "/vouchers" },
+      { name: "Voucher inventory", path: "/vouchers/list" },
     ],
   },
 
@@ -97,26 +98,32 @@ const navItems: NavItem[] = [
     path: "/transactions", 
     roles: ["TENANT_ADMIN", "MANAGER", "VIEWER", "SYSTEM_ADMIN"] 
   },
+  { 
+    icon: <ShootingStarIcon />, 
+    name: "Redemptions & payouts", 
+    path: "/redemptions", 
+    roles: ["TENANT_ADMIN", "MANAGER", "OPERATOR", "SYSTEM_ADMIN"] 
+  },
 
   // ── SETUP & TEAM ───────────────────────────────────────────────
   {
     icon: <GridIcon />,
-    name: "Setup & Masters",
+    name: "Setup & masters",
     roles: ["TENANT_ADMIN", "SYSTEM_ADMIN"],
     subItems: [
-      { name: "Platform Settings", path: "/settings" },
+      { name: "Platform settings", path: "/settings" },
       { name: "Organizations", path: "/settings/organizations" },
       { name: "Regions", path: "/settings/regions" },
       { name: "Towns", path: "/settings/towns" },
-      { name: "Sales Hierarchy", path: "/settings/sales-hierarchy" },
+      { name: "Sales hierarchy", path: "/settings/sales-hierarchy" },
     ],
   },
-  { icon: <GroupIcon />, name: "Our Team", path: "/team", roles: ["TENANT_ADMIN", "SYSTEM_ADMIN"] },
-  { icon: <UserCircleIcon />, name: "Profile", path: "/profile" },
+  { icon: <GroupIcon />, name: "Team management", path: "/team", roles: ["TENANT_ADMIN", "SYSTEM_ADMIN"] },
+  { icon: <UserCircleIcon />, name: "Account profile", path: "/profile" },
 ];
 
-const AppSidebar: React.FC = () => {
-  const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
+export default function AppSidebar() {
+  const { isExpanded, isMobileOpen, isHovered, setIsHovered, toggleMobileSidebar } = useSidebar();
   const { user, loading } = useUser();
   const pathname = usePathname();
   const router = useRouter();
@@ -137,6 +144,12 @@ const AppSidebar: React.FC = () => {
     (item: NavItem) => item.subItems?.some((sub) => isActive(sub.path)) ?? false,
     [isActive]
   );
+
+  const handleNavClick = () => {
+    if (isMobileOpen) {
+      toggleMobileSidebar();
+    }
+  };
 
   useEffect(() => {
     navItems.forEach((nav) => {
@@ -171,40 +184,42 @@ const AppSidebar: React.FC = () => {
     }
   };
 
+  const userInitials = `${user?.firstName?.charAt(0) || ""}${user?.lastName?.charAt(0) || ""}`.toUpperCase() || "U";
+
   return (
     <aside
       className={`fixed flex flex-col top-0 left-0 h-screen bg-white dark:bg-gray-950 border-r border-gray-100 dark:border-white/[0.06] transition-all duration-250 ease-in-out z-50 overflow-hidden
         ${isOpen ? "w-[260px]" : "w-[68px]"}
         ${isMobileOpen ? "translate-x-0" : "-translate-x-full"}
-        lg:translate-x-0 shadow-sm`}
+        lg:translate-x-0 shadow-md lg:shadow-none`}
       onMouseEnter={() => !isExpanded && setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {/* Logo */}
-      <div className={`flex items-center h-[56px] px-4 border-b border-gray-100 dark:border-white/[0.06] shrink-0 ${isOpen ? "gap-3" : "justify-center"}`}>
-        <Link href="/" className="flex items-center gap-3 group min-w-0">
-          <div className="w-8 h-8 rounded-lg bg-brand-500 flex items-center justify-center shrink-0 shadow-sm group-hover:shadow-md group-hover:scale-105 transition-all">
-            <span className="text-white font-black text-sm leading-none tracking-tight">TZ</span>
+      {/* Logo Section */}
+      <div className={`flex items-center h-[64px] px-4 border-b border-gray-100 dark:border-white/[0.06] shrink-0 ${isOpen ? "gap-3" : "justify-center"}`}>
+        <Link href="/overview" onClick={handleNavClick} className="flex items-center gap-3 group min-w-0">
+          <div className="w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center shrink-0 shadow-sm shadow-brand-500/30 group-hover:scale-105 transition-all">
+            <span className="text-white font-black text-xs tracking-tight">TZ</span>
           </div>
           {isOpen && (
             <div className="flex flex-col min-w-0">
-              <span className="text-[15px] font-bold tracking-tight text-gray-900 dark:text-white leading-tight">
+              <span className="text-sm font-extrabold tracking-tight text-gray-900 dark:text-white leading-tight">
                 TuZo<span className="text-brand-500">Hub</span>
               </span>
-              <span className="text-[10px] text-gray-400 font-medium tracking-wide leading-tight">Loyalty Platform</span>
+              <span className="text-[10px] text-gray-400 font-medium tracking-wide leading-tight">Enterprise Loyalty</span>
             </div>
           )}
         </Link>
       </div>
 
-      {/* Nav */}
-      <nav className="flex-1 overflow-y-auto py-4 no-scrollbar">
+      {/* Navigation Links */}
+      <nav className="flex-1 overflow-y-auto py-4 custom-scrollbar">
         {isOpen && (
           <p className="px-4 pb-2 text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-white/20">
-            Main Menu
+            Main navigation
           </p>
         )}
-        <ul className="flex flex-col gap-0.5 px-2.5">
+        <ul className="flex flex-col gap-1 px-2.5">
           {filteredNavItems.map((nav) => (
             <li key={nav.name}>
               {nav.subItems ? (
@@ -216,10 +231,10 @@ const AppSidebar: React.FC = () => {
                       isParentActive(nav) ? "light-sidebar-item-active" : "light-sidebar-item-inactive"
                     } ${!isOpen ? "justify-center px-0" : ""}`}
                   >
-                    <span className={`w-[18px] h-[18px] shrink-0 ${isParentActive(nav) ? "text-brand-500" : "text-gray-400"}`}>{nav.icon}</span>
+                    <span className={`w-4 h-4 shrink-0 ${isParentActive(nav) ? "text-brand-500" : "text-gray-400"}`}>{nav.icon}</span>
                     {isOpen && (
                       <>
-                        <span className="flex-1 text-left truncate">{nav.name}</span>
+                        <span className="flex-1 text-left text-xs font-semibold truncate">{nav.name}</span>
                         <ChevronDownIcon
                           className={`w-3.5 h-3.5 shrink-0 transition-transform duration-200 ${
                             openSubmenu === nav.name ? "rotate-180 text-brand-500" : "text-gray-300"
@@ -234,14 +249,15 @@ const AppSidebar: React.FC = () => {
                       className="overflow-hidden transition-all duration-200"
                       style={{ height: openSubmenu === nav.name ? `${subMenuHeight[nav.name]}px` : "0px" }}
                     >
-                      <ul className="ml-5 mt-0.5 border-l-2 border-gray-100 dark:border-white/[0.06] pl-3 pb-1 space-y-0.5">
+                      <ul className="ml-5 mt-1 border-l-2 border-gray-100 dark:border-white/[0.06] pl-3 pb-1 space-y-1">
                         {nav.subItems.map((sub) => (
                           <li key={sub.name}>
                             <Link
                               href={sub.path}
-                              className={`light-sidebar-sub-item ${
+                              onClick={handleNavClick}
+                              className={`light-sidebar-sub-item text-xs font-medium ${
                                 isActive(sub.path)
-                                  ? "light-sidebar-sub-item-active"
+                                  ? "light-sidebar-sub-item-active font-semibold"
                                   : "light-sidebar-sub-item-inactive"
                               }`}
                             >
@@ -260,12 +276,13 @@ const AppSidebar: React.FC = () => {
                 nav.path && (
                   <Link
                     href={nav.path}
+                    onClick={handleNavClick}
                     title={!isOpen ? nav.name : undefined}
-                    className={`light-sidebar-item ${
+                    className={`light-sidebar-item text-xs font-semibold ${
                       isActive(nav.path) ? "light-sidebar-item-active" : "light-sidebar-item-inactive"
                     } ${!isOpen ? "justify-center px-0" : ""}`}
                   >
-                    <span className={`w-[18px] h-[18px] shrink-0 ${isActive(nav.path) ? "text-brand-500" : "text-gray-400"}`}>{nav.icon}</span>
+                    <span className={`w-4 h-4 shrink-0 ${isActive(nav.path) ? "text-brand-500" : "text-gray-400"}`}>{nav.icon}</span>
                     {isOpen && <span className="truncate">{nav.name}</span>}
                   </Link>
                 )
@@ -275,54 +292,35 @@ const AppSidebar: React.FC = () => {
         </ul>
       </nav>
 
-      {/* Footer */}
+      {/* Footer Profile Section */}
       <div className={`border-t border-gray-100 dark:border-white/[0.06] p-3.5 shrink-0 ${!isOpen ? "flex items-center justify-center" : ""}`}>
         <div className={`flex items-center gap-3 ${!isOpen ? "justify-center" : ""}`}>
-          <div className="w-8 h-8 rounded-full bg-brand-50 dark:bg-brand-500/20 flex items-center justify-center shrink-0 border border-brand-100 dark:border-brand-500/30">
-            <span className="text-brand-500 font-bold text-xs">
-              {user?.role?.charAt(0) || "U"}
-            </span>
+          <div className="w-8 h-8 rounded-full bg-brand-500/10 text-brand-600 dark:bg-brand-500/20 dark:text-brand-400 flex items-center justify-center shrink-0 border border-brand-500/20 font-bold text-xs shadow-2xs">
+            {userInitials}
           </div>
           {isOpen && (
             <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-semibold text-gray-800 dark:text-white/80 truncate leading-tight">
-                {user ? `${user.firstName} ${user.lastName}` : "Guest"}
+              <p className="text-xs font-bold text-gray-900 dark:text-white truncate leading-tight">
+                {user ? `${user.firstName} ${user.lastName}` : "User"}
               </p>
-              <p className="text-[11px] text-gray-400 truncate leading-tight">
-                {user?.role?.replace("_", " ") || "Visitor"}
+              <p className="text-[11px] text-gray-400 font-medium truncate leading-tight capitalize">
+                {user?.role?.replace("_", " ").toLowerCase() || "Operator"}
               </p>
             </div>
           )}
           {isOpen && (
             <button 
               onClick={handleLogout}
-              className="p-1.5 rounded-md text-gray-400 hover:text-error-500 hover:bg-error-50 transition-colors"
-              title="Logout"
+              className="p-1.5 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors"
+              title="Sign out"
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-                <polyline points="16 17 21 12 16 7"></polyline>
-                <line x1="21" y1="12" x2="9" y2="12"></line>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l3 3m0 0l-3 3m3-3H2.25" />
               </svg>
             </button>
           )}
         </div>
-        {!isOpen && (
-          <button 
-            onClick={handleLogout}
-            className="mt-2 p-1.5 rounded-md text-gray-400 hover:text-error-500 hover:bg-error-50 transition-colors"
-            title="Logout"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-              <polyline points="16 17 21 12 16 7"></polyline>
-              <line x1="21" y1="12" x2="9" y2="12"></line>
-            </svg>
-          </button>
-        )}
       </div>
     </aside>
   );
-};
-
-export default AppSidebar;
+}

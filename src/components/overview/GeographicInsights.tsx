@@ -9,11 +9,11 @@ export default function GeographicInsights() {
 
   if (isLoading) {
     return (
-      <div className="rounded-2xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-white/[0.03] w-full h-full animate-pulse">
-        <div className="h-6 w-32 bg-gray-100 dark:bg-white/5 rounded mb-4"></div>
-        <div className="space-y-4">
+      <div className="rounded-2xl border border-gray-200/80 bg-white p-5 dark:border-white/[0.06] dark:bg-white/[0.02] w-full h-full animate-pulse">
+        <div className="h-4 w-32 bg-gray-100 dark:bg-white/5 rounded mb-4"></div>
+        <div className="space-y-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-10 w-full bg-gray-50 dark:bg-white/5 rounded"></div>
+            <div key={i} className="h-8 w-full bg-gray-50 dark:bg-white/5 rounded-xl"></div>
           ))}
         </div>
       </div>
@@ -21,45 +21,53 @@ export default function GeographicInsights() {
   }
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6 w-full h-full">
-      <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90 mb-6">
-        Geographic Reach
-      </h3>
-
-      <div className="space-y-6">
-        {regions.length > 0 ? (
-          regions.map((r: any, idx: number) => {
-            const colors = ["bg-brand-500", "bg-orange-500", "bg-blue-light-500", "bg-success-500", "bg-purple-500"];
-            const color = colors[idx % colors.length];
-            return (
-              <div key={r.regionName} className="relative">
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    {r.regionName}
-                  </span>
-                  <span className="text-sm font-bold text-gray-800 dark:text-white">
-                    {parseInt(r.consumerCount).toLocaleString()} consumers
-                  </span>
-                </div>
-                <div className="w-full h-2 rounded-full bg-gray-100 dark:bg-gray-800">
-                  <div 
-                    className={`h-full rounded-full ${color}`} 
-                    style={{ width: `${Math.min(100, (parseInt(r.consumerCount) / 100) * 100)}%` }} // Placeholder scaling
-                  ></div>
-                </div>
-              </div>
-            );
-          })
-        ) : (
-          <div className="py-8 text-center text-gray-500 dark:text-gray-400 border border-dashed border-gray-200 dark:border-gray-800 rounded-xl">
-             No regional data yet.
+    <div className="rounded-2xl border border-gray-200/80 bg-white p-5 dark:border-white/[0.06] dark:bg-white/[0.02] w-full h-full flex flex-col justify-between shadow-sm">
+      <div>
+        <div className="flex items-center justify-between border-b border-gray-100 dark:border-white/5 pb-3 mb-4">
+          <div className="flex items-center gap-2">
+            <span className="p-1 bg-emerald-500/10 text-emerald-600 rounded text-xs">🗺️</span>
+            <h3 className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+              Geographic Participant Reach
+            </h3>
           </div>
-        )}
+          <span className="text-[10px] font-mono text-gray-400">Regional Distribution</span>
+        </div>
+
+        <div className="space-y-4">
+          {regions.length > 0 ? (
+            regions.map((r: any, idx: number) => {
+              const colors = ["bg-brand-500", "bg-purple-500", "bg-blue-500", "bg-emerald-500", "bg-amber-500"];
+              const color = colors[idx % colors.length];
+              return (
+                <div key={r.regionName} className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-gray-800 dark:text-gray-200">
+                      {r.regionName}
+                    </span>
+                    <span className="text-xs font-bold font-mono text-gray-900 dark:text-white">
+                      {parseInt(r.consumerCount).toLocaleString()} Members
+                    </span>
+                  </div>
+                  <div className="w-full h-1.5 rounded-full bg-gray-100 dark:bg-white/10 overflow-hidden">
+                    <div 
+                      className={`h-full rounded-full ${color}`} 
+                      style={{ width: `${Math.min(100, (parseInt(r.consumerCount) / 100) * 100)}%` }}
+                    ></div>
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div className="py-6 text-center text-xs font-bold text-gray-400">
+              No regional distribution data available.
+            </div>
+          )}
+        </div>
       </div>
 
-      <div className="mt-8 p-4 bg-gray-50 dark:bg-white/5 rounded-xl">
-        <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
-          Geographic reach is calculated based on registered consumer town associations within your defined regions.
+      <div className="mt-4 p-3 bg-gray-50/50 dark:bg-white/[0.01] border border-gray-100 dark:border-white/5 rounded-xl">
+        <p className="text-[11px] text-gray-400 leading-relaxed">
+          Geographic telemetry tracks active consumer registrations across designated regional hubs.
         </p>
       </div>
     </div>

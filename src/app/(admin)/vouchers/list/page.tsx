@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/table";
 import { useApi } from "@/hooks/useApi";
 import ModernSelect from "@/components/ui/ModernSelect";
+import { BoxCubeIcon } from "@/icons";
 
 const STATUS_COLORS: Record<string, any> = {
   PRINTED: "light",
@@ -47,31 +48,37 @@ export default function VoucherList() {
     { value: "EXPIRED", label: "Expired" },
   ];
 
-  // Because useApi strips pagination dynamically to return arrays:
   const vouchers: any[] = Array.isArray(result) ? result : (result?.data || []);
   const pagination = result && !Array.isArray(result) ? result.pagination : null;
 
   return (
-    <div className="w-full space-y-6 animate-in fade-in duration-500">
+    <div className="w-full space-y-6 animate-fadeIn pb-12">
 
       {/* ── Page Header ──────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-gray-200/80 dark:border-white/[0.06] pb-5">
         <div>
-          <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white">Voucher Inventory</h1>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Browse every individual scratch card code in your system</p>
+          <div className="flex items-center gap-3">
+            <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white">Voucher Inventory</h1>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-brand-500/10 text-brand-600 dark:text-brand-400 text-xs font-semibold border border-brand-500/20">
+              Serial Ledger
+            </span>
+          </div>
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            Browse and inspect every individual scratch card security token in your platform catalog.
+          </p>
         </div>
         <Link
           href="/vouchers"
-          className="inline-flex items-center gap-2 rounded-md bg-white px-4 py-2.5 text-sm font-medium text-gray-700 border border-gray-300 shadow-sm hover:bg-gray-50 dark:bg-white/5 dark:border-white/10 dark:text-gray-300 dark:hover:bg-white/10 transition-colors"
+          className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-gray-900 dark:text-white text-xs font-semibold rounded-xl border border-gray-200/80 dark:border-white/10 transition flex items-center gap-2"
         >
-          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+          <svg className="h-4 w-4 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
             <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
           </svg>
-          Back to batches
+          Back to Batches
         </Link>
       </div>
 
-      {/* ── Filters ──────────────────────────────────────────────────────── */}
+      {/* ── Filters Toolbar ────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-4">
         <div className="w-64">
           <ModernSelect
@@ -89,57 +96,62 @@ export default function VoucherList() {
             placeholder="All statuses"
           />
         </div>
-        <span className="ml-auto text-xs text-gray-400 dark:text-gray-500">
-          {pagination?.total?.toLocaleString() ?? "—"} vouchers total
+        <span className="ml-auto text-xs font-semibold text-gray-500 dark:text-gray-400">
+          {pagination?.total?.toLocaleString() ?? vouchers.length} Vouchers Cataloged
         </span>
       </div>
 
       {/* ── Table ─────────────────────────────────────────────────────────── */}
-      <div className="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#18181b] overflow-hidden">
+      <div className="bg-white dark:bg-white/[0.02] border border-gray-200/80 dark:border-white/[0.06] rounded-2xl overflow-hidden shadow-sm">
         {isLoading ? (
           <div className="flex h-48 items-center justify-center">
-            <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-500 border-t-transparent"></div>
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-500 border-t-transparent"></div>
           </div>
         ) : (
           <Table className="w-full">
-            <TableHeader className="bg-gray-50/50 dark:bg-white/5">
-              <TableRow className="border-none">
-                <TableCell isHeader className="py-3 px-6 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Serial no.</TableCell>
-                <TableCell isHeader className="py-3 px-6 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Batch</TableCell>
-                <TableCell isHeader className="py-3 px-6 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Product</TableCell>
-                <TableCell isHeader className="py-3 px-6 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Status</TableCell>
-                <TableCell isHeader className="py-3 px-6 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Claimed</TableCell>
-                <TableCell isHeader className="py-3 px-6 text-right text-xs font-medium text-gray-500 dark:text-gray-400">Actions</TableCell>
+            <TableHeader>
+              <TableRow className="bg-gray-50/50 dark:bg-white/[0.01]">
+                <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400">Serial Number</TableCell>
+                <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400">Batch Code</TableCell>
+                <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400">Linked Product</TableCell>
+                <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400">Status</TableCell>
+                <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400">Claimed Date</TableCell>
+                <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400 text-right">Actions</TableCell>
               </TableRow>
             </TableHeader>
-            <TableBody>
+            <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.04]">
               {vouchers.length > 0 ? vouchers.map((v: any) => (
-                <TableRow key={v.id} className="border-b border-gray-100 dark:border-white/5 hover:bg-gray-50 dark:hover:bg-white/[0.02]">
-                  <TableCell className="py-3 px-6">
-                    <span className="font-mono text-sm font-bold text-gray-900 dark:text-white tracking-widest">{v.serialNumber}</span>
+                <TableRow key={v.id} className="hover:bg-gray-50/50 dark:hover:bg-white/[0.02] transition-colors">
+                  <TableCell className="py-3.5 px-6">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-brand-500/10 text-brand-600 dark:text-brand-400 flex items-center justify-center font-bold text-xs border border-brand-500/20 shrink-0 shadow-2xs">
+                        <BoxCubeIcon className="w-3.5 h-3.5" />
+                      </div>
+                      <span className="font-mono text-xs font-bold text-gray-900 dark:text-white tracking-wider">{v.serialNumber}</span>
+                    </div>
                   </TableCell>
-                  <TableCell className="py-3 px-6">
-                    <span className="font-mono text-xs text-gray-600 dark:text-gray-400">{v.batchNumber}</span>
+                  <TableCell className="py-3.5 px-6">
+                    <span className="font-mono text-xs font-semibold text-gray-600 dark:text-gray-300">{v.batchNumber}</span>
                   </TableCell>
-                  <TableCell className="py-3 px-6 text-sm text-gray-600 dark:text-gray-400">
-                    {v.productName || <span className="text-gray-300 dark:text-gray-600 italic">Not linked</span>}
+                  <TableCell className="py-3.5 px-6 text-xs text-gray-600 dark:text-gray-300 font-medium">
+                    {v.productName || <span className="text-gray-400 italic">Not linked</span>}
                   </TableCell>
-                  <TableCell className="py-3 px-6">
+                  <TableCell className="py-3.5 px-6">
                     <Badge size="sm" color={STATUS_COLORS[v.status] || "light"}>{v.status}</Badge>
                   </TableCell>
-                  <TableCell className="py-3 px-6 text-xs text-gray-500 dark:text-gray-400">
-                    {v.redeemedAt ? new Date(v.redeemedAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : <span className="text-gray-300 dark:text-gray-600">—</span>}
+                  <TableCell className="py-3.5 px-6 text-xs text-gray-500 font-medium">
+                    {v.redeemedAt ? new Date(v.redeemedAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : <span className="text-gray-400">—</span>}
                   </TableCell>
-                  <TableCell className="py-3 px-6 text-right">
-                    <Link href={`/vouchers/${v.id}`} className="text-sm font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300 transition-colors">
-                      View details →
+                  <TableCell className="py-3.5 px-6 text-right">
+                    <Link href={`/vouchers/${v.id}`} className="text-xs font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 transition">
+                      Details
                     </Link>
                   </TableCell>
                 </TableRow>
               )) : (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-16 text-center text-sm text-gray-500 dark:text-gray-400">
-                    No vouchers found. {!batchFilter && "Generate a batch first, then view individual vouchers here."}
+                  <TableCell colSpan={6} className="py-16 text-center text-xs text-gray-400 italic font-medium">
+                    No vouchers found. {!batchFilter && "Generate a batch first to see serial items."}
                   </TableCell>
                 </TableRow>
               )}
@@ -150,20 +162,20 @@ export default function VoucherList() {
 
       {/* ── Pagination ────────────────────────────────────────────────────── */}
       {pagination && pagination.total > 50 && (
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-gray-500 dark:text-gray-400">Page {page} of {Math.ceil(pagination.total / 50)}</span>
+        <div className="flex items-center justify-between pt-2">
+          <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">Page {page} of {Math.ceil(pagination.total / 50)}</span>
           <div className="flex items-center gap-2">
             <button
               disabled={page <= 1}
               onClick={() => setPage(p => p - 1)}
-              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-white/5 dark:border-white/10 dark:text-gray-300 dark:hover:bg-white/10"
+              className="px-3.5 py-1.5 text-xs font-semibold rounded-xl bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-gray-300 hover:bg-gray-200 transition disabled:opacity-50"
             >
               Previous
             </button>
             <button
               disabled={page * 50 >= pagination.total}
               onClick={() => setPage(p => p + 1)}
-              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-white/5 dark:border-white/10 dark:text-gray-300 dark:hover:bg-white/10"
+              className="px-3.5 py-1.5 text-xs font-semibold rounded-xl bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-gray-300 hover:bg-gray-200 transition disabled:opacity-50"
             >
               Next
             </button>

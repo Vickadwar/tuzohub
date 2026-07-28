@@ -3,8 +3,11 @@ import { db } from "../../db";
 import { consumers, redemptionsQueue, tenantSettings } from "../../db/schema";
 import { eq, and } from "drizzle-orm";
 import { SmsService } from "../../services/sms.service";
+import { DarajaService } from "../../services/daraja.service";
+import { PayoutGateway } from "../../services/payout.gateway";
 
-const app = new Hono();
+const app = new Hono<{ Variables: { user: any } }>();
+
 
 /**
  * Daraja B2C Result Callback
@@ -194,6 +197,185 @@ app.post("/b2c/timeout", async (c) => {
   }
 
   return c.json({ ResultCode: 0, ResultDesc: "Accepted" });
+});
+
+/**
+ * POST /api/mpesa/balance/query
+ * Triggers an on-demand M-Pesa float balance check with Safaricom Daraja API.
+ */
+app.post("/balance/query", async (c) => {
+  const user = c.get("user");
+  const tenantId = c.req.query("tenantId") || user?.tenantId;
+
+  if (!tenantId) {
+    return c.json({ success: false, error: "Tenant ID is required" }, 400);
+  }
+
+  try {
+    const tSettingsRecords = await db.select().from(tenantSettings).where(eq(tenantSettings.tenantId, tenantId)).limit(1);
+    const creds = (tSettingsRecords[0]?.credentials || {}) as any;
+
+    if (!creds?.darajaConsumerKey) {
+      return c.json({ success: false, error: "Daraja credentials not configured for this tenant" }, 400);
+    }
+
+    const config = {
+      consumerKey: creds.darajaConsumerKey,
+      consumerSecret: creds.darajaConsumerSecret,
+      shortCode: creds.darajaShortCode,
+      initiatorName: creds.darajaInitiatorName || "TuZoInitiator",
+      initiatorPassword: "",
+      securityCredential: creds.darajaSecurityCredential || "PLACEHOLDER",
+      baseUrl: creds.darajaBaseUrl || "https://sandbox.safaricom.co.ke",
+      callbackUrl: `https://${process.env.APP_DOMAIN || "tuzohub.com"}/api/mpesa/balance/callback?tenantId=${tenantId}`,
+      queueTimeOutUrl: `https://${process.env.APP_DOMAIN || "tuzohub.com"}/api/mpesa/balance/timeout?tenantId=${tenantId}`,
+    };
+
+    const result = await DarajaService.getAccountBalance({ config });
+
+    return c.json({
+      success: true,
+      message: "Balance query request submitted to Safaricom successfully",
+      conversationId: result.ConversationID,
+      rawResponse: result,
+    });
+  } catch (error: any) {
+    console.error("[Mpesa Balance Query Error]", error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+/**
+ * POST /api/mpesa/balance/callback
+ * Safaricom calls this asynchronously with account float balances.
+ */
+app.post("/balance/callback", async (c) => {
+  const body = await c.req.json();
+  const tenantId = c.req.query("tenantId");
+
+  console.log(`[Mpesa Balance Callback] Tenant: ${tenantId}`, JSON.stringify(body));
+
+  if (!body.Result || !tenantId) {
+    return c.json({ ResultCode: 1, ResultDesc: "Invalid payload or tenantId missing" });
+  }
+
+  const { ResultCode, ResultDesc, ResultParameters } = body.Result;
+
+  if (ResultCode === 0 && ResultParameters?.ResultParameter) {
+    const params: Array<{ Key: string; Value: any }> = ResultParameters.ResultParameter;
+    const getParam = (key: string) => params.find((p) => p.Key === key)?.Value;
+
+    // Safaricom balance parameters
+    // Format is typically "Working Account|KES|900000.00|900000.00|0.00|0.00"
+    const accountBalanceRaw = getParam("AccountBalance") || getParam("Balance") || "";
+    const utilityFund = getParam("B2CUtilityAccountAvailableFunds") || getParam("UtilityAccountAvailableFunds");
+    const workingFund = getParam("B2CWorkingAccountAvailableFunds") || getParam("WorkingAccountAvailableFunds");
+    const chargeFund  = getParam("ChargeAccountAvailableFunds");
+
+    try {
+      const tSettingsRecords = await db.select().from(tenantSettings).where(eq(tenantSettings.tenantId, tenantId)).limit(1);
+      const tSettings = tSettingsRecords[0];
+
+      if (tSettings) {
+        const creds = (tSettings.credentials || {}) as any;
+        const updatedCreds = {
+          ...creds,
+          floatBalance: {
+            utility: utilityFund ?? creds.floatBalance?.utility ?? "N/A",
+            working: workingFund ?? creds.floatBalance?.working ?? "N/A",
+            charge: chargeFund ?? creds.floatBalance?.charge ?? "N/A",
+            raw: accountBalanceRaw,
+            lastCheckedAt: new Date().toISOString(),
+          }
+        };
+
+        await db.update(tenantSettings)
+          .set({ credentials: updatedCreds, updatedAt: new Date() })
+          .where(eq(tenantSettings.id, tSettings.id));
+        
+        console.log(`[Mpesa Balance Callback] Updated float balance for tenant ${tenantId}`);
+      }
+    } catch (err) {
+      console.error("[Mpesa Balance Callback DB Error]", err);
+    }
+  }
+
+  return c.json({ ResultCode: 0, ResultDesc: "Accepted" });
+});
+
+/**
+ * POST /api/mpesa/balance/timeout
+ * Safaricom calls this if account balance query times out.
+ */
+app.post("/balance/timeout", async (c) => {
+  const body = await c.req.json();
+  console.warn("[Mpesa Balance Timeout]", body);
+  return c.json({ ResultCode: 0, ResultDesc: "Accepted" });
+});
+
+/**
+ * POST /api/mpesa/manual-payout
+ * Directly triggers a manual M-Pesa B2C payout to any number or selected consumer.
+ */
+app.post("/manual-payout", async (c) => {
+  const user = c.get("user");
+  const body = await c.req.json().catch(() => ({}));
+  const tenantId = body.tenantId || user?.tenantId;
+
+  if (!tenantId) {
+    return c.json({ success: false, error: "Tenant ID is required" }, 400);
+  }
+
+  const { phoneNumber, consumerId, amount, remarks } = body;
+
+  if (!phoneNumber || !amount || amount <= 0) {
+    return c.json({ success: false, error: "Valid phone number and positive amount in KES are required" }, 400);
+  }
+
+  try {
+    const formattedPhone = phoneNumber.startsWith("+") 
+      ? phoneNumber.slice(1) 
+      : phoneNumber.startsWith("0") 
+        ? "254" + phoneNumber.slice(1) 
+        : phoneNumber;
+
+    // 1. Create a recorded redemption queue entry for auditability
+    let resolvedConsumerId = consumerId;
+    if (!resolvedConsumerId) {
+      const foundConsumer = await db.query.consumers.findFirst({
+        where: and(eq(consumers.phoneNumber, formattedPhone), eq(consumers.tenantId, tenantId))
+      });
+      if (foundConsumer) {
+        resolvedConsumerId = foundConsumer.id;
+      }
+    }
+
+    const redemptionId = "MANUAL-" + Math.random().toString(36).substring(2, 9).toUpperCase();
+
+    // 2. Dispatch payout directly via PayoutGateway
+    const result = await PayoutGateway.execute({
+      tenantId,
+      redemptionId,
+      amount: Number(amount),
+      currency: "KES",
+      destination: formattedPhone,
+      fulfillmentStrategy: "AUTOMATED_PAYOUT",
+    });
+
+    if (!result.success) {
+      return c.json({ success: false, error: result.error || "Manual payout failed" }, 400);
+    }
+
+    return c.json({
+      success: true,
+      message: `Manual payout of KES ${amount} dispatched to ${formattedPhone} successfully`,
+      externalReference: result.externalReference,
+      rawResponse: result.rawResponse,
+    });
+  } catch (error: any) {
+    console.error("[Mpesa Manual Payout Error]", error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
 });
 
 // ── Helpers ────────────────────────────────────────────────────────────────

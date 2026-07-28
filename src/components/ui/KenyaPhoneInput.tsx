@@ -7,26 +7,26 @@ interface KenyaPhoneInputProps {
   onChange: (value: string) => void;
   placeholder?: string;
   className?: string;
+  size?: "sm" | "md";
 }
 
 /**
- * Specialized Kenyan Phone Input
+ * High-Density Kenyan Phone Input Component
  * - Automatically handles +254 prefix
- * - Strips leading zeros and redundant prefixes
- * - Restricts input to valid digits (7... or 1...)
+ * - Strips leading zeros and redundant country code
+ * - Validates Safaricom / Airtel 9-digit format
  */
 export default function KenyaPhoneInput({
   value,
   onChange,
   placeholder = "7XX XXX XXX",
   className = "",
+  size = "sm",
 }: KenyaPhoneInputProps) {
-  // We store the 9-digit internal value (without +254)
   const [displayValue, setDisplayValue] = useState("");
 
   useEffect(() => {
-    // If value comes in with +254, strip it for internal display
-    const cleaned = value.replace(/^\+254/, "").replace(/^254/, "");
+    const cleaned = (value || "").replace(/^\+254/, "").replace(/^254/, "");
     setDisplayValue(cleaned);
   }, [value]);
 
@@ -48,7 +48,6 @@ export default function KenyaPhoneInput({
 
     setDisplayValue(input);
     
-    // Notify parent with the full +254 format if not empty
     if (input.length > 0) {
       onChange(`+254${input}`);
     } else {
@@ -56,17 +55,21 @@ export default function KenyaPhoneInput({
     }
   };
 
+  const isComplete = displayValue.length === 9;
+  const isValidSafaricom = /^(7(?:0|1|2|4|6|9)|11(?:0|1|2|3|4|5))/.test(displayValue);
+
+  const heightClass = size === "md" ? "h-10 text-xs" : "h-9 text-xs";
+
   return (
-    <div className={`relative flex items-center ${className}`}>
-      {/* Visual Prefix */}
-      <div className="absolute left-3.5 flex items-center gap-2 pointer-events-none border-r border-gray-200 dark:border-white/[0.08] pr-2.5 mr-2.5">
-        <div className="w-5 h-3.5 bg-[#000000] relative overflow-hidden rounded-[1px]">
-          {/* Miniature Kenya Flag Simulation */}
-          <div className="absolute top-0 w-full h-[30%] bg-[#000000]" />
-          <div className="absolute top-[35%] w-full h-[30%] bg-[#BB1924]" />
-          <div className="absolute bottom-0 w-full h-[30%] bg-[#006600]" />
+    <div className={`relative flex items-center w-full ${className}`}>
+      {/* Visual Kenya Flag + Country Code Prefix */}
+      <div className="absolute left-3 flex items-center gap-1.5 pointer-events-none border-r border-gray-200/80 dark:border-white/10 pr-2.5 z-10">
+        <div className="w-4 h-3 bg-black relative overflow-hidden rounded-xs shrink-0 flex flex-col justify-between border border-gray-300/30">
+          <div className="w-full h-1 bg-black" />
+          <div className="w-full h-1 bg-red-600" />
+          <div className="w-full h-1 bg-emerald-600" />
         </div>
-        <span className="text-[14px] font-bold text-gray-400">+254</span>
+        <span className="text-xs font-mono font-bold text-gray-500 dark:text-gray-400">+254</span>
       </div>
 
       <input
@@ -74,8 +77,25 @@ export default function KenyaPhoneInput({
         value={displayValue}
         onChange={handleChange}
         placeholder={placeholder}
-        className="w-full h-11 pl-[92px] pr-4 rounded-lg border border-gray-200 dark:border-white/[0.08] bg-white dark:bg-white/[0.03] text-[15px] font-medium text-gray-800 dark:text-white/90 placeholder:text-gray-300 dark:placeholder:text-white/20 focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/10 transition shadow-sm"
+        className={`w-full ${heightClass} pl-[84px] ${isComplete ? "pr-8" : "pr-3.5"} rounded-xl border border-gray-200/80 dark:border-white/10 bg-gray-50/50 dark:bg-white/[0.03] font-mono font-semibold text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 shadow-2xs focus:bg-white dark:focus:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 transition`}
       />
+
+      {/* Validation Indicator Pill */}
+      {isComplete && (
+        <div className="absolute right-2.5 pointer-events-none flex items-center">
+          {isValidSafaricom ? (
+            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-500" title="Valid Kenyan Mobile">
+              <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="3">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            </span>
+          ) : (
+            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-amber-500/10 text-amber-500 font-bold text-[10px]" title="Check prefix">
+              !
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }

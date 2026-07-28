@@ -47,13 +47,8 @@ export default function OrganizationDetail({ params }: PageProps) {
 
   if (isError) {
     return (
-      <div className="w-full">
-        <div className="flex items-center gap-3 rounded-md bg-error-50 p-4 border border-error-200 dark:bg-error-500/10 dark:border-error-500/20">
-          <svg className="h-5 w-5 shrink-0 text-error-600 dark:text-error-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-          </svg>
-          <p className="text-sm font-medium text-error-800 dark:text-error-300">Failed to load organization. Please try again.</p>
-        </div>
+      <div className="w-full p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-semibold animate-fadeIn">
+        Failed to load organization details. Please refresh or try again.
       </div>
     );
   }
@@ -61,7 +56,7 @@ export default function OrganizationDetail({ params }: PageProps) {
   if (isLoading || !org) {
     return (
       <div className="flex min-h-[60vh] w-full items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-brand-500 dark:border-white/10 dark:border-t-brand-400"></div>
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-500 border-t-transparent"></div>
       </div>
     );
   }
@@ -70,10 +65,9 @@ export default function OrganizationDetail({ params }: PageProps) {
     setIsSaving(true);
     setError("");
 
-    // Validation
     if (!editData.name) { setError("Organization name is required"); setIsSaving(false); return; }
     if (editData.email && !/^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(editData.email)) {
-      setError("Invalid email address"); setIsSaving(false); return;
+      setError("Invalid email address format"); setIsSaving(false); return;
     }
     if (editData.taxId && editData.taxId.length > 20) {
       setError("Tax ID is too long (max 20 characters)"); setIsSaving(false); return;
@@ -151,24 +145,6 @@ export default function OrganizationDetail({ params }: PageProps) {
     }
   };
 
-  const toggleStatus = async () => {
-    const newStatus = !org.isActive;
-    setIsSaving(true);
-    try {
-      const res = await authenticatedFetch(`/api/organizations/${id}`, {
-        method: "PUT",
-        body: JSON.stringify({ isActive: newStatus }),
-      });
-      if (res.success) {
-        mutate();
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
   const getTypeBadgeColor = (type: string) => {
     switch (type) {
       case "DEALER": return "info";
@@ -178,41 +154,46 @@ export default function OrganizationDetail({ params }: PageProps) {
     }
   };
 
-  // Filter out consumers already in the org
+  const formatTypeLabel = (type?: string) => {
+    if (!type) return "Organization";
+    return type.charAt(0).toUpperCase() + type.slice(1).toLowerCase();
+  };
+
   const availableConsumers = consumers?.filter(
     (c) => !members?.find((m) => m.consumer?.id === c.id)
   ) || [];
 
   return (
-    <div className="w-full space-y-6 animate-in fade-in duration-500">
+    <div className="w-full space-y-6 animate-fadeIn pb-12">
 
       {/* ── Page Header ──────────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5 rounded-lg bg-white p-6 border border-gray-200 shadow-sm dark:bg-[#18181b] dark:border-white/10">
-        <div className="flex items-center gap-5">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-gray-200/80 dark:border-white/[0.06] pb-5">
+        <div className="flex items-center gap-4">
           <Link
             href="/settings/organizations"
-            className="group flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white shadow-sm transition-all hover:bg-gray-50 dark:border-white/10 dark:bg-[#18181b] dark:hover:bg-white/5"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors text-gray-500 dark:text-gray-400"
           >
-            <svg className="h-4 w-4 text-gray-500 transition-transform group-hover:-translate-x-0.5 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
             </svg>
           </Link>
 
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-lg font-bold text-amber-700 shadow-sm dark:bg-amber-500/20 dark:text-amber-400">
+          {/* Rounded Avatar Circle */}
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold text-sm border border-amber-500/20 shadow-2xs">
             {org.name?.charAt(0) || "O"}
           </div>
 
           <div>
-            <div className="flex flex-wrap items-center gap-3">
-              <h1 className="text-xl font-semibold tracking-tight text-gray-900 dark:text-white">
+            <div className="flex items-center gap-3">
+              <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white">
                 {org.name}
               </h1>
               <Badge color={getTypeBadgeColor(org.type) as any} size="sm">
-                {org.type}
+                {formatTypeLabel(org.type)}
               </Badge>
             </div>
-            <p className="mt-1 text-sm font-medium text-gray-500 dark:text-gray-400">
-              {org.registrationNumber || "No registration number"} · {org.phone || "No phone"}
+            <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+              {org.registrationNumber || "No registration number"} · {org.phone || "No phone contact"}
             </p>
           </div>
         </div>
@@ -222,25 +203,25 @@ export default function OrganizationDetail({ params }: PageProps) {
             <>
               <button
                 onClick={() => { setIsEditing(false); setEditData(org); setError(""); }}
-                className="rounded-md bg-white px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 shadow-sm hover:bg-gray-50 dark:bg-white/5 dark:border-white/10 dark:text-gray-300 dark:hover:bg-white/10 transition-colors"
+                className="px-4 py-2.5 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 text-xs font-semibold rounded-xl transition"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSave}
                 disabled={isSaving}
-                className="inline-flex items-center justify-center rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 disabled:opacity-60 transition-colors"
+                className="px-5 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold rounded-xl shadow-md shadow-brand-500/20 transition disabled:opacity-50"
               >
-                {isSaving ? "Saving changes..." : "Save changes"}
+                {isSaving ? "Saving..." : "Save changes"}
               </button>
             </>
           ) : (
             <button
               onClick={() => setIsEditing(true)}
-              className="inline-flex items-center gap-2 rounded-md bg-white px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 shadow-sm hover:bg-gray-50 dark:bg-white/5 dark:border-white/10 dark:text-gray-300 dark:hover:bg-white/10 transition-colors"
+              className="px-4 py-2.5 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 text-xs font-semibold rounded-xl transition flex items-center gap-2 shadow-2xs"
             >
-              <svg className="h-4 w-4 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+              <svg className="h-4 w-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
               </svg>
               Edit details
             </button>
@@ -249,11 +230,8 @@ export default function OrganizationDetail({ params }: PageProps) {
       </div>
 
       {error && (
-        <div className="flex items-center gap-3 rounded-md bg-error-50 p-4 border border-error-200 dark:bg-error-500/10 dark:border-error-500/20">
-          <svg className="h-5 w-5 shrink-0 text-error-600 dark:text-error-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <p className="text-sm font-medium text-error-800 dark:text-error-300">{error}</p>
+        <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-semibold">
+          {error}
         </div>
       )}
 
@@ -261,17 +239,17 @@ export default function OrganizationDetail({ params }: PageProps) {
       <div className="grid grid-cols-12 gap-6">
 
         {/* Left Column (Spans 8 columns) */}
-        <div className="col-span-12 space-y-6 xl:col-span-8">
+        <div className="col-span-12 xl:col-span-8 space-y-6">
 
           {/* Organization Details */}
-          <div className="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#18181b] overflow-hidden">
-            <div className="border-b border-gray-100 px-6 py-5 dark:border-white/5">
-              <h3 className="text-base font-semibold text-gray-900 dark:text-white">Organization details</h3>
-              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Core business information and contact details.</p>
+          <div className="bg-white dark:bg-white/[0.02] border border-gray-200/80 dark:border-white/[0.06] rounded-2xl overflow-hidden shadow-sm">
+            <div className="border-b border-gray-100 px-6 py-4 dark:border-white/5">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white">Organization Details</h3>
+              <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Core business information, tax identifiers, and contact details.</p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 p-6">
               <DetailItem label="Organization name" value={org.name} isEditing={isEditing} field="name" data={editData} setData={setEditData} />
-              <DetailItem label="Type" value={org.type} isEditing={isEditing} field="type" data={editData} setData={setEditData} type="select" options={[
+              <DetailItem label="Type" value={formatTypeLabel(org.type)} isEditing={isEditing} field="type" data={editData} setData={setEditData} type="select" options={[
                 { value: "DEALER", label: "Dealer" },
                 { value: "DISTRIBUTOR", label: "Distributor" },
                 { value: "CONTRACTOR", label: "Contractor" },
@@ -288,17 +266,17 @@ export default function OrganizationDetail({ params }: PageProps) {
           </div>
 
           {/* Members Section */}
-          <div className="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#18181b] overflow-hidden">
-            <div className="border-b border-gray-100 px-6 py-5 dark:border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="bg-white dark:bg-white/[0.02] border border-gray-200/80 dark:border-white/[0.06] rounded-2xl overflow-hidden shadow-sm">
+            <div className="border-b border-gray-100 px-6 py-4 dark:border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <h3 className="text-base font-semibold text-gray-900 dark:text-white">Organization members</h3>
-                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{members?.length || 0} members currently enrolled</p>
+                <h3 className="text-sm font-bold text-gray-900 dark:text-white">Organization Members</h3>
+                <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{members?.length || 0} members enrolled under this organization</p>
               </div>
               <button
                 onClick={() => setShowAddMember(!showAddMember)}
-                className="inline-flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-brand-700 transition-colors"
+                className="px-3.5 py-2 bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold rounded-xl shadow-sm transition flex items-center justify-center gap-1.5"
               >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
+                <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                 </svg>
                 Add member
@@ -307,10 +285,10 @@ export default function OrganizationDetail({ params }: PageProps) {
 
             {/* Add Member Form */}
             {showAddMember && (
-              <div className="border-b border-gray-100 px-6 py-4 dark:border-white/5 bg-gray-50/50 dark:bg-white/[0.02]">
+              <div className="border-b border-gray-100 px-6 py-4 dark:border-white/5 bg-gray-50/50 dark:bg-white/[0.01]">
                 <div className="flex flex-col sm:flex-row items-end gap-3">
                   <div className="w-full sm:w-[300px]">
-                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Consumer</label>
+                    <label className="block text-[11px] font-semibold text-gray-500 dark:text-gray-400 mb-1">Consumer</label>
                     <ModernSelect
                       options={availableConsumers.map((c: any) => ({
                         value: c.id,
@@ -322,7 +300,7 @@ export default function OrganizationDetail({ params }: PageProps) {
                     />
                   </div>
                   <div className="w-full sm:w-[180px]">
-                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Role</label>
+                    <label className="block text-[11px] font-semibold text-gray-500 dark:text-gray-400 mb-1">Role</label>
                     <ModernSelect
                       options={[
                         { value: "WORKER", label: "Worker" },
@@ -338,7 +316,7 @@ export default function OrganizationDetail({ params }: PageProps) {
                   <button
                     onClick={handleAddMember}
                     disabled={!selectedConsumerId || isAddingMember}
-                    className="inline-flex h-10 items-center justify-center rounded-md bg-brand-600 px-4 text-sm font-medium text-white shadow-sm hover:bg-brand-700 disabled:opacity-60 transition-colors shrink-0"
+                    className="px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold rounded-xl shadow-sm transition disabled:opacity-50 shrink-0"
                   >
                     {isAddingMember ? "Adding..." : "Enroll"}
                   </button>
@@ -349,48 +327,46 @@ export default function OrganizationDetail({ params }: PageProps) {
             <div className="w-full overflow-x-auto">
               {members && members.length > 0 ? (
                 <Table className="w-full">
-                  <TableHeader className="bg-gray-50/50 dark:bg-white/5">
-                    <TableRow className="border-b border-gray-100 dark:border-white/5">
-                      <TableCell isHeader className="py-3 px-6 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Member</TableCell>
-                      <TableCell isHeader className="py-3 px-6 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Role</TableCell>
-                      <TableCell isHeader className="py-3 px-6 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Loyalty #</TableCell>
-                      <TableCell isHeader className="py-3 px-6 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Joined</TableCell>
-                      <TableCell isHeader className="py-3 px-6 text-right text-xs font-medium text-gray-500 dark:text-gray-400">Actions</TableCell>
+                  <TableHeader>
+                    <TableRow className="bg-gray-50/50 dark:bg-white/[0.01]">
+                      <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400">Member</TableCell>
+                      <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400">Role</TableCell>
+                      <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400">Loyalty #</TableCell>
+                      <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400">Joined</TableCell>
+                      <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400 text-right">Actions</TableCell>
                     </TableRow>
                   </TableHeader>
-                  <TableBody>
+                  <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.04]">
                     {members.map((m: any) => (
-                      <TableRow key={m.id} className="border-b border-gray-100 dark:border-white/5 hover:bg-gray-50 dark:hover:bg-white/[0.02] transition-colors">
-                        <TableCell className="py-4 px-6">
+                      <TableRow key={m.id} className="hover:bg-gray-50/50 dark:hover:bg-white/[0.02] transition-colors">
+                        <TableCell className="py-3.5 px-6">
                           <div className="flex items-center gap-3">
-                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-semibold text-brand-700 dark:bg-brand-500/20 dark:text-brand-400">
+                            <div className="w-8 h-8 rounded-full bg-brand-500/10 text-brand-600 dark:text-brand-400 flex items-center justify-center font-bold text-xs shrink-0 border border-brand-500/20 shadow-2xs">
                               {m.consumer?.firstName?.charAt(0) || "?"}
                             </div>
                             <div className="flex flex-col">
-                              <span className="text-sm font-medium text-gray-900 dark:text-white leading-tight">
+                              <span className="text-xs font-bold text-gray-900 dark:text-white leading-tight">
                                 {m.consumer?.firstName} {m.consumer?.lastName}
                               </span>
-                              <span className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{m.consumer?.phoneNumber}</span>
+                              <span className="text-[11px] text-gray-400 mt-0.5">{m.consumer?.phoneNumber}</span>
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell className="py-4 px-6">
-                          <Badge size="sm" color="light">{m.role}</Badge>
+                        <TableCell className="py-3.5 px-6">
+                          <Badge size="sm" color="light">{m.role?.charAt(0) + m.role?.slice(1).toLowerCase()}</Badge>
                         </TableCell>
-                        <TableCell className="py-4 px-6 text-sm font-mono text-gray-500 dark:text-gray-400">
+                        <TableCell className="py-3.5 px-6 text-xs font-mono text-gray-500">
                           {m.consumer?.loyaltyNumber || "—"}
                         </TableCell>
-                        <TableCell className="py-4 px-6 text-sm text-gray-500 dark:text-gray-400">
+                        <TableCell className="py-3.5 px-6 text-xs text-gray-500 font-medium">
                           {m.joinedAt ? new Date(m.joinedAt).toLocaleDateString() : "—"}
                         </TableCell>
-                        <TableCell className="py-4 px-6 text-right">
+                        <TableCell className="py-3.5 px-6 text-right">
                           <button
                             onClick={() => handleRemoveMember(m.id)}
-                            className="text-error-600 hover:text-error-700 dark:text-error-400 dark:hover:text-error-300 transition-colors"
+                            className="text-xs font-semibold text-rose-600 hover:text-rose-700 transition"
                           >
-                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
+                            Remove
                           </button>
                         </TableCell>
                       </TableRow>
@@ -398,12 +374,8 @@ export default function OrganizationDetail({ params }: PageProps) {
                   </TableBody>
                 </Table>
               ) : (
-                <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <svg className="mb-3 h-8 w-8 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
-                  </svg>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">No members enrolled</p>
-                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Add consumers as members to track their loyalty under this organization.</p>
+                <div className="py-12 text-center text-xs font-semibold text-gray-400 italic">
+                  No members currently enrolled under this organization.
                 </div>
               )}
             </div>
@@ -411,89 +383,36 @@ export default function OrganizationDetail({ params }: PageProps) {
         </div>
 
         {/* Right Column (Spans 4 columns) */}
-        <div className="col-span-12 space-y-6 xl:col-span-4">
+        <div className="col-span-12 xl:col-span-4 space-y-6">
 
           {/* Metrics */}
-          <div className="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#18181b]">
-            <div className="border-b border-gray-100 px-6 py-5 dark:border-white/5">
-              <h3 className="text-base font-semibold text-gray-900 dark:text-white">Organization metrics</h3>
+          <div className="bg-white dark:bg-white/[0.02] border border-gray-200/80 dark:border-white/[0.06] rounded-2xl overflow-hidden shadow-sm">
+            <div className="border-b border-gray-100 px-6 py-4 dark:border-white/5">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white">Organization Metrics</h3>
             </div>
-            <div className="flex flex-col p-6 space-y-4">
-              <div className="flex flex-col gap-1 rounded-md border border-gray-100 bg-gray-50 p-4 dark:border-white/5 dark:bg-white/5">
-                <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Total members</span>
-                <span className="text-2xl font-semibold text-gray-900 dark:text-white">{members?.length || 0}</span>
+            <div className="p-6 space-y-3">
+              <div className="p-3.5 rounded-xl bg-gray-50 dark:bg-white/[0.02] border border-gray-100 dark:border-white/5 flex items-center justify-between">
+                <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">Total Members</span>
+                <span className="text-lg font-bold text-gray-900 dark:text-white">{members?.length || 0}</span>
               </div>
-              <div className="flex flex-col gap-1 rounded-md border border-gray-100 bg-gray-50 p-4 dark:border-white/5 dark:bg-white/5">
-                <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Points earned (all time)</span>
-                <span className="text-2xl font-semibold text-gray-900 dark:text-white">0</span>
+              <div className="p-3.5 rounded-xl bg-gray-50 dark:bg-white/[0.02] border border-gray-100 dark:border-white/5 flex items-center justify-between">
+                <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">Points Earned</span>
+                <span className="text-lg font-bold text-gray-900 dark:text-white">0</span>
               </div>
-              <div className="flex flex-col gap-1 rounded-md border border-gray-100 bg-gray-50 p-4 dark:border-white/5 dark:bg-white/5">
-                <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Redemptions value</span>
-                <span className="text-2xl font-semibold text-success-600 dark:text-success-500">KES 0</span>
+              <div className="p-3.5 rounded-xl bg-gray-50 dark:bg-white/[0.02] border border-gray-100 dark:border-white/5 flex items-center justify-between">
+                <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">Redemptions Value</span>
+                <span className="text-lg font-bold text-emerald-600 dark:text-emerald-400">KES 0</span>
               </div>
-            </div>
-          </div>
-
-          {/* New Performance Metrics */}
-          <div className="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#18181b]">
-            <div className="border-b border-gray-100 px-6 py-5 dark:border-white/5">
-              <h3 className="text-base font-semibold text-gray-900 dark:text-white">Performance Analytics</h3>
-            </div>
-            <div className="p-6 space-y-6">
-               <div className="grid grid-cols-2 gap-4">
-                  <div className="p-4 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 text-white">
-                    <span className="text-xs uppercase tracking-wider opacity-80">Sales Volume</span>
-                    <p className="text-2xl font-bold mt-1">45,210 L</p>
-                    <div className="mt-2 flex items-center text-xs text-brand-100">
-                      <svg className="h-3 w-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M12 7a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0V8.414l-4.293 4.293a1 1 0 01-1.414 0L8 10.414l-4.293 4.293a1 1 0 01-1.414-1.414l5-5a1 1 0 011.414 0L11 10.586 14.586 7H12z" clipRule="evenodd" /></svg>
-                      +12% vs last month
-                    </div>
-                  </div>
-               </div>
-
-               <div>
-                 <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-3">Top Products</h4>
-                 <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600 dark:text-gray-400">Premium Gloss White</span>
-                      <span className="text-sm font-semibold">1,240 scans</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600 dark:text-gray-400">Acrylic Emulsion Grey</span>
-                      <span className="text-sm font-semibold">890 scans</span>
-                    </div>
-                 </div>
-               </div>
             </div>
           </div>
 
           {/* Insights */}
-          <div className="relative overflow-hidden rounded-lg bg-gray-900 p-6 text-white shadow-sm dark:bg-[#121212] dark:border dark:border-white/10">
-            <div className="relative z-10">
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-brand-400">Insights engine</h4>
-              <p className="mt-2 text-lg font-semibold leading-tight text-white">Engagement tracking</p>
-              <p className="mt-2 text-sm leading-relaxed text-gray-400">
-                As members earn and redeem points, this panel will show purchase trends, top products, and ROI metrics.
-              </p>
-            </div>
-            <div className="absolute -right-8 -bottom-8 h-32 w-32 rounded-full bg-brand-500/20 blur-2xl pointer-events-none"></div>
-          </div>
-
-          {/* Actions */}
-          <div className="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#18181b]">
-            <div className="border-b border-gray-100 px-6 py-4 dark:border-white/5">
-              <h4 className="text-sm font-semibold text-gray-900 dark:text-white">Actions</h4>
-            </div>
-            <div className="p-4 space-y-2">
-              <button className="flex w-full items-center justify-between rounded-md px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-white/5 dark:hover:text-white transition-colors">
-                Export member list
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-              </button>
-              <button className="flex w-full items-center justify-between rounded-md px-4 py-2 text-sm font-medium text-error-600 hover:bg-error-50 dark:text-error-400 dark:hover:bg-error-500/10 transition-colors">
-                Deactivate organization
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-              </button>
-            </div>
+          <div className="bg-gradient-to-br from-gray-900 via-gray-950 to-black border border-gray-800 p-6 rounded-2xl text-white shadow-xl space-y-3 relative overflow-hidden">
+            <span className="text-[10px] font-semibold text-amber-400 uppercase tracking-wider">Insights Telemetry</span>
+            <h4 className="text-sm font-bold text-white">Engagement Tracking</h4>
+            <p className="text-xs text-gray-400 leading-relaxed">
+              As members earn and redeem points, this telemetry hub logs purchase patterns, top product velocity, and loyalty ROI metrics.
+            </p>
           </div>
         </div>
       </div>
@@ -503,8 +422,8 @@ export default function OrganizationDetail({ params }: PageProps) {
 
 function DetailItem({ label, value, isEditing, field, data, setData, type = "text", options }: any) {
   return (
-    <div className="flex flex-col gap-1.5 py-3 border-b border-gray-50 last:border-0 dark:border-white/5">
-      <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+    <div className="flex flex-col gap-1 py-2.5 border-b border-gray-100/50 dark:border-white/5 last:border-0">
+      <span className="text-xs font-semibold text-gray-400">
         {label}
       </span>
       {isEditing ? (
@@ -521,12 +440,12 @@ function DetailItem({ label, value, isEditing, field, data, setData, type = "tex
               type={type}
               value={data[field] || ""}
               onChange={(e) => setData({ ...data, [field]: e.target.value })}
-              className="h-10 w-full rounded-md border border-gray-300 bg-white px-3 text-sm text-gray-900 shadow-sm transition-colors placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30"
+              className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50/50 px-3.5 text-xs font-medium text-gray-900 shadow-2xs transition-colors placeholder:text-gray-400 focus:border-brand-500/40 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/30 dark:border-white/10 dark:bg-white/[0.03] dark:text-white"
             />
           )}
         </div>
       ) : (
-        <span className={`text-sm mt-0.5 ${!value ? "text-gray-400 font-normal" : "text-gray-900 font-medium dark:text-gray-200 capitalize"}`}>
+        <span className={`text-xs font-bold ${!value ? "text-gray-400 italic" : "text-gray-900 dark:text-white"}`}>
           {value || "Not provided"}
         </span>
       )}

@@ -85,4 +85,54 @@ export class DarajaService {
       throw new Error("Daraja Payout Request Failed");
     }
   }
+
+  /**
+   * Triggers an Account Balance query for M-Pesa float
+   */
+  static async getAccountBalance(params: {
+    config: DarajaConfig;
+    remarks?: string;
+  }) {
+    const { config, remarks = "Float Balance Query" } = params;
+
+    // Simulation check: If credentials look like placeholders, simulate success
+    if (config.consumerKey.includes("PLACEHOLDER") || !config.consumerKey) {
+      console.log(`[Daraja Simulation] Triggering Account Balance Query for ${config.shortCode}`);
+      return {
+        ConversationID: `SIM-BAL-${Math.random().toString(36).slice(2, 9)}`,
+        OriginatorConversationID: `SIM-ORG-BAL-${Math.random().toString(36).slice(2, 9)}`,
+        ResponseDescription: "Accept the service request successfully."
+      };
+    }
+
+    const accessToken = await this.getAccessToken(config);
+
+    let securityCredential = config.securityCredential;
+    if ((!securityCredential || securityCredential === "PLACEHOLDER") && config.initiatorPassword) {
+      securityCredential = generateSecurityCredential(config.initiatorPassword, config.certificatePem);
+    }
+
+    const payload = {
+      Initiator: config.initiatorName,
+      SecurityCredential: securityCredential,
+      CommandID: "AccountBalance",
+      PartyA: config.shortCode,
+      IdentifierType: "4", // 4 = Shortcode
+      Remarks: remarks,
+      QueueTimeOutURL: config.queueTimeOutUrl,
+      ResultURL: config.callbackUrl,
+    };
+
+    try {
+      const response = await axios.post(`${config.baseUrl}/mpesa/accountbalance/v1/query`, payload, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        timeout: 15000,
+      });
+      return response.data;
+    } catch (error: any) {
+      console.error("Daraja Balance Query Error:", error.response?.data || error.message);
+      throw new Error("Daraja Balance Query Failed");
+    }
+  }
 }
+

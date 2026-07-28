@@ -12,9 +12,18 @@ import {
 } from "@/components/ui/table";
 import { useApi, authenticatedFetch } from "@/hooks/useApi";
 import ModernSelect from "@/components/ui/ModernSelect";
+import { ArrowDownIcon, ArrowUpIcon } from "@/icons";
 
 interface PageProps {
   params: Promise<{ id: string }>;
+}
+
+function formatEnumValue(val?: string | null): string {
+  if (!val) return "Not provided";
+  return val
+    .toLowerCase()
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
 export default function ConsumerDetail({ params }: PageProps) {
@@ -23,29 +32,27 @@ export default function ConsumerDetail({ params }: PageProps) {
 
   const [activeTab, setActiveTab] = useState<"overview" | "identity" | "permissions">("overview");
   const [activityPage, setActivityPage] = useState(1);
+  const [activityFilter, setActivityFilter] = useState<"all" | "credit" | "debit">("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedLog, setSelectedLog] = useState<any | null>(null);
 
   const { data: dashboard, isLoading, isError, mutate } = useApi<any>(
     `/consumers/dashboard/${id}?page=${activityPage}&limit=8`
   );
 
-  // Reference data for dropdowns
-  const { data: organizations } = useApi<any[]>("/organizations");
   const { data: regions } = useApi<any[]>("/locations/regions");
   const { data: towns } = useApi<any[]>("/locations/towns");
-  const { data: salesStaff } = useApi<any[]>("/sales");
 
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
   const [editData, setEditData] = useState<any>({});
 
-  // Smart town/region state
   const [selectedRegionId, setSelectedRegionId] = useState("");
 
   useEffect(() => {
     if (dashboard?.consumer) {
       setEditData(dashboard.consumer);
-      // Set initial region from the consumer's town
       if (dashboard.consumer.town?.regionId) {
         setSelectedRegionId(dashboard.consumer.town.regionId);
       }
@@ -54,18 +61,19 @@ export default function ConsumerDetail({ params }: PageProps) {
 
   if (isError) {
     return (
-      <div className="w-full p-6">
-        <div className="flex items-center gap-3 rounded-md bg-error-50 p-4 border border-error-200 dark:bg-error-500/10 dark:border-error-500/20">
-          <p className="text-sm font-medium text-error-800 dark:text-error-300">Failed to load consumer dashboard. Please try again.</p>
-        </div>
+      <div className="w-full p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 flex items-center gap-3 animate-fadeIn">
+        <svg className="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+        <p className="text-xs font-bold">Failed to load consumer profile. Please check network connectivity.</p>
       </div>
     );
   }
 
   if (isLoading || !dashboard) {
     return (
-      <div className="flex min-h-[60vh] w-full items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-500 border-t-transparent"></div>
+      <div className="flex min-h-[50vh] w-full items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-500 border-t-transparent"></div>
       </div>
     );
   }
@@ -94,16 +102,18 @@ export default function ConsumerDetail({ params }: PageProps) {
     try {
       const resData = await authenticatedFetch(`/api/consumers/profile/${id}`, {
         method: "PUT",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(editData),
       });
-      if (resData.success) {
+      const json = await resData.json().catch(() => resData);
+      if (json.success || resData.ok) {
         setIsEditing(false);
         mutate();
       } else {
-        setError(resData.error || "Update failed");
+        setError(json.error || "Update failed");
       }
     } catch (err: any) {
-      setError(err.info?.error || "Network error occurred");
+      setError(err.message || "Network error occurred");
     } finally {
       setIsSaving(false);
     }
@@ -111,12 +121,10 @@ export default function ConsumerDetail({ params }: PageProps) {
 
   const initials = `${consumer.firstName?.charAt(0) || ""}${consumer.lastName?.charAt(0) || ""}`.toUpperCase();
 
-  // Filtered towns based on selected region
   const filteredTowns = selectedRegionId
     ? (towns || []).filter((t: any) => t.regionId === selectedRegionId)
     : (towns || []);
 
-  // When town changes, auto-fill region
   const handleTownChange = (townId: string) => {
     setEditData({ ...editData, townId });
     const town = (towns || []).find((t: any) => t.id === townId);
@@ -125,7 +133,6 @@ export default function ConsumerDetail({ params }: PageProps) {
     }
   };
 
-  // When region changes, clear town if it's not in the new region
   const handleRegionChange = (regionId: string) => {
     setSelectedRegionId(regionId);
     const currentTown = (towns || []).find((t: any) => t.id === editData.townId);
@@ -134,36 +141,58 @@ export default function ConsumerDetail({ params }: PageProps) {
     }
   };
 
-  return (
-    <div className="w-full space-y-6 animate-in fade-in duration-500">
+  // Filter activity items client-side for rapid search & category pills
+  const rawActivities: any[] = activity?.data || [];
+  const filteredActivities = rawActivities.filter((log: any) => {
+    const isCredit = log.accountingEntry === "CREDIT";
+    if (activityFilter === "credit" && !isCredit) return false;
+    if (activityFilter === "debit" && isCredit) return false;
 
-      {/* ── Top header bar ────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5 rounded-lg bg-white p-6 border border-gray-200 shadow-sm dark:bg-[#18181b] dark:border-white/10">
-        <div className="flex items-center gap-5">
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const meta = log.metadata || {};
+      const matchText = `${log.description || ""} ${meta.productName || ""} ${log.actionCategory || ""} ${log.id || ""}`.toLowerCase();
+      if (!matchText.includes(q)) return false;
+    }
+    return true;
+  });
+
+  const totalPages = Math.ceil((activity?.total || 1) / (activity?.limit || 8));
+
+  return (
+    <div className="w-full space-y-6 animate-fadeIn pb-12">
+
+      {/* ── Top Header Card ─────────────────────────────────────────────────── */}
+      <div className="bg-white dark:bg-white/[0.02] border border-gray-200/80 dark:border-white/[0.06] p-6 rounded-2xl shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5">
+        <div className="flex items-center gap-4">
           <Link
             href="/consumers"
-            className="group flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-white shadow-sm transition-all hover:bg-gray-50 dark:border-white/10 dark:bg-[#18181b] dark:hover:bg-white/5"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors"
           >
-            <svg className="h-4 w-4 text-gray-500 transition-transform group-hover:-translate-x-0.5 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+            <svg className="h-4 w-4 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
             </svg>
           </Link>
 
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-brand-100 text-lg font-bold text-brand-700 shadow-sm dark:bg-brand-500/20 dark:text-brand-400">
+          {/* Rounded Avatar Circle */}
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-500/10 text-brand-600 dark:text-brand-400 font-bold text-sm border border-brand-500/20 shadow-2xs">
             {initials || "C"}
           </div>
 
           <div>
             <div className="flex flex-wrap items-center gap-3">
-              <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white">
+              <h1 className="text-lg font-bold tracking-tight text-gray-900 dark:text-white">
                 {consumer.firstName} {consumer.lastName}
               </h1>
               <Badge color={consumer.status === "active" ? "success" : consumer.status === "blocked" ? "error" : "warning"} size="sm">
                 {consumer.status === "active" ? "Active" : consumer.status === "blocked" ? "Blocked" : "Suspended"}
               </Badge>
+              <span className="px-2.5 py-0.5 rounded-full bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-gray-300 text-xs font-semibold">
+                {formatEnumValue(consumer.consumerType)}
+              </span>
             </div>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2">
-              Loyalty ID <span className="font-mono text-gray-900 dark:text-gray-300">{consumer.loyaltyNumber}</span>
+            <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400 font-medium">
+              Loyalty ID <span className="font-mono font-bold text-gray-700 dark:text-gray-300">{consumer.loyaltyNumber}</span> • {consumer.phoneNumber || "No phone linked"}
             </p>
           </div>
         </div>
@@ -173,436 +202,487 @@ export default function ConsumerDetail({ params }: PageProps) {
             <>
               <button
                 onClick={() => { setIsEditing(false); setEditData(consumer); setError(""); }}
-                className="rounded-md bg-white px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 shadow-sm hover:bg-gray-50 dark:bg-white/5 dark:border-white/10 dark:text-gray-300 dark:hover:bg-white/10 transition-colors"
+                className="px-4 py-2 text-xs font-semibold text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSave}
                 disabled={isSaving}
-                className="inline-flex items-center justify-center rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 disabled:opacity-60 transition-colors"
+                className="px-5 py-2 bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold rounded-xl transition shadow-md shadow-brand-500/20 disabled:opacity-50 flex items-center gap-2"
               >
-                {isSaving ? "Saving changes..." : "Save changes"}
+                {isSaving ? "Saving..." : "Save Changes"}
               </button>
             </>
           ) : (
             <button
               onClick={() => setIsEditing(true)}
-              className="inline-flex items-center gap-2 rounded-md bg-white px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 shadow-sm hover:bg-gray-50 dark:bg-white/5 dark:border-white/10 dark:text-gray-300 dark:hover:bg-white/10 transition-colors"
+              className="px-4 py-2 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-200 text-xs font-semibold rounded-xl hover:bg-gray-50 dark:hover:bg-white/10 transition flex items-center gap-2 shadow-2xs"
             >
-              <svg className="h-4 w-4 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" />
+              <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
               </svg>
-              Edit profile
+              Edit Profile &amp; KYC
             </button>
           )}
         </div>
       </div>
 
       {error && (
-        <div className="flex items-start gap-3 rounded-md bg-error-50 p-4 border border-error-200 dark:bg-error-500/10 dark:border-error-500/20">
-          <svg className="mt-0.5 h-5 w-5 shrink-0 text-error-600 dark:text-error-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-          </svg>
-          <p className="text-sm font-medium text-error-800 dark:text-error-300">{error}</p>
+        <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 text-xs font-semibold">
+          {error}
         </div>
       )}
 
-      {/* ── Tabs navigation ────────────────────────────────────────────────── */}
-      <div className="border-b border-gray-200 dark:border-white/10">
-        <nav className="-mb-px flex space-x-6">
-          {[
-            { id: "overview", label: "Overview" },
-            { id: "identity", label: "Identity & profile" },
-            { id: "permissions", label: "Security & permissions" },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={`whitespace-nowrap border-b-2 py-3 px-1 text-sm font-medium transition-colors ${activeTab === tab.id
-                ? "border-brand-500 text-brand-600 dark:border-brand-400 dark:text-brand-400"
-                : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:border-gray-600 dark:hover:text-gray-300"
-                }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </nav>
+      {/* ── Sub-Navigation Tabs Pill Bar ───────────────────────────────────── */}
+      <div className="flex items-center gap-2 border-b border-gray-200/80 dark:border-white/[0.06] pb-3">
+        {[
+          { id: "overview", label: "Overview & Telemetry" },
+          { id: "identity", label: "Identity & Profile" },
+          { id: "permissions", label: "Security & Permissions" },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id as any)}
+            className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
+              activeTab === tab.id
+                ? "bg-brand-600 text-white shadow-sm"
+                : "text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
-      {/* ── Tab contents ──────────────────────────────────────────────────── */}
-
-      {/* 1. Overview Tab — Unified Activity + Analytics */}
+      {/* ── TAB 1: OVERVIEW & TELEMETRY ───────────────────────────────────── */}
       {activeTab === "overview" && (
         <div className="grid grid-cols-12 gap-6">
-          {/* Left column — Wallet + Activity */}
+          {/* Left Column (8 Columns) */}
           <div className="col-span-12 space-y-6 xl:col-span-8">
 
-            {/* Wallet Card */}
-            <div className="relative overflow-hidden rounded-lg bg-gray-900 p-6 text-white shadow-sm dark:bg-[#121212] dark:border dark:border-white/10">
-              <div className="relative z-10">
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-brand-400">Available balance</h3>
-                <div className="mt-3 flex items-baseline gap-2">
-                  <span className="text-4xl font-bold tracking-tight">{Number(wallet?.pointsBalance || 0).toLocaleString()}</span>
-                  <span className="text-sm font-medium text-gray-400">pts</span>
-                </div>
-                <div className="mt-4 flex flex-col gap-3">
-                  <p className="text-sm text-gray-400">
-                    Est. value: <span className="font-medium text-white">KES {Number(wallet?.pointsBalance || 0).toLocaleString()}</span>
-                  </p>
-                  {parseFloat(wallet?.bankedPointsBalance || "0") > 0 && (
-                    <div className="inline-flex w-fit items-center gap-2 rounded-md bg-white/10 px-3 py-1.5 text-xs font-medium text-brand-200 border border-white/10 backdrop-blur-sm">
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 21v-8.25M15.75 21v-8.25M8.25 21v-8.25M3 9l9-6 9 6m-1.5 12V10.332A48.36 48.36 0 0012 9.75c-2.551 0-5.056.2-7.5.582V21M3 21h18M12 6.75h.008v.008H12V6.75z" />
-                      </svg>
-                      Banked: {Number(wallet.bankedPointsBalance || 0).toLocaleString()} pts
-                    </div>
-                  )}
-                </div>
+            {/* Wallet Balance Hero Card */}
+            <div className="bg-gradient-to-br from-gray-900 via-gray-950 to-black border border-gray-800 p-6 rounded-2xl text-white shadow-xl relative overflow-hidden flex flex-col justify-between">
+              <div className="flex items-center justify-between border-b border-gray-800 pb-3">
+                <span className="text-xs font-semibold text-brand-400">Available Loyalty Wallet</span>
+                <span className="text-xs font-mono text-gray-500">Live Ledger</span>
               </div>
-              <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-brand-500/20 blur-2xl pointer-events-none"></div>
+              <div className="mt-4">
+                <p className="text-3xl font-bold font-mono tracking-tight text-white">
+                  {Number(wallet?.pointsBalance || 0).toLocaleString()} <span className="text-xs font-normal text-gray-400">PTS</span>
+                </p>
+                <p className="mt-1 text-xs text-gray-400">
+                  Est. cash redemption value: <span className="font-bold font-mono text-emerald-400">KES {Number(wallet?.pointsBalance || 0).toLocaleString()}</span>
+                </p>
+              </div>
+              {parseFloat(wallet?.bankedPointsBalance || "0") > 0 && (
+                <div className="mt-4 inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/10 text-xs font-semibold text-brand-300 border border-white/10 w-fit">
+                  🏦 Banked savings: {Number(wallet.bankedPointsBalance || 0).toLocaleString()} PTS
+                </div>
+              )}
             </div>
 
-            {/* Unified Activity Log */}
-            <div className="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#18181b] flex flex-col">
-              <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4 dark:border-white/5">
-                <h3 className="text-base font-semibold text-gray-900 dark:text-white">Activity log</h3>
-                <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600 dark:bg-white/10 dark:text-gray-300">
-                  {activity.total} records
-                </span>
+            {/* Innovative Activity Telemetry Table Card with Pagination & Inspection */}
+            <div className="bg-white dark:bg-white/[0.02] border border-gray-200/80 dark:border-white/[0.06] rounded-2xl overflow-hidden shadow-sm flex flex-col">
+              
+              {/* Header & Filter Controls */}
+              <div className="border-b border-gray-100 dark:border-white/5 p-4 sm:px-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900 dark:text-white">Activity Telemetry Log</h3>
+                  <p className="text-xs text-gray-400 mt-0.5">Real-time point accumulation and redemption audit timeline</p>
+                </div>
+
+                {/* Filter Controls */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Search activity..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-8 pr-3 py-1.5 bg-gray-50 dark:bg-white/[0.03] border border-gray-200 dark:border-white/10 rounded-xl text-xs font-medium text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500/40 w-44"
+                    />
+                    <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                  </div>
+
+                  {/* Category Pills */}
+                  <div className="flex items-center gap-1 bg-gray-100 dark:bg-white/5 p-1 rounded-xl">
+                    <button
+                      onClick={() => setActivityFilter("all")}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition ${activityFilter === "all" ? "bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-2xs" : "text-gray-500 dark:text-gray-400 hover:text-gray-900"}`}
+                    >
+                      All
+                    </button>
+                    <button
+                      onClick={() => setActivityFilter("credit")}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition ${activityFilter === "credit" ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20" : "text-gray-500 dark:text-gray-400 hover:text-gray-900"}`}
+                    >
+                      Earn (+)
+                    </button>
+                    <button
+                      onClick={() => setActivityFilter("debit")}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition ${activityFilter === "debit" ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20" : "text-gray-500 dark:text-gray-400 hover:text-gray-900"}`}
+                    >
+                      Redeem (-)
+                    </button>
+                  </div>
+                </div>
               </div>
+
+              {/* Table Data */}
               <div className="w-full overflow-x-auto">
                 <Table className="w-full">
-                  <TableHeader className="bg-gray-50/50 dark:bg-white/5">
-                    <TableRow className="border-none">
-                      <TableCell isHeader className="py-3 px-6 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Timestamp</TableCell>
-                      <TableCell isHeader className="py-3 px-6 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Product</TableCell>
-                      <TableCell isHeader className="py-3 px-6 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Channel</TableCell>
-                      <TableCell isHeader className="py-3 px-6 text-right text-xs font-medium text-gray-500 dark:text-gray-400">Amount / Pts</TableCell>
-                      <TableCell isHeader className="py-3 px-6 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Status</TableCell>
-                      <TableCell isHeader className="py-3 px-6 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Ref / Receipt</TableCell>
+                  <TableHeader>
+                    <TableRow className="bg-gray-50/50 dark:bg-white/[0.01]">
+                      <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400">Timestamp</TableCell>
+                      <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400">Product / Activity</TableCell>
+                      <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400">Channel</TableCell>
+                      <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400 text-right">Points</TableCell>
+                      <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400">Status</TableCell>
+                      <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400 text-right">Inspect</TableCell>
                     </TableRow>
                   </TableHeader>
-                  <TableBody>
-                    {activity.data.length > 0 ? activity.data.map((log: any, i: number) => {
-                      const isCredit = log.accountingEntry === "CREDIT";
-                      const meta = log.metadata as any || {};
-                      const productName = meta.productName || log.description || "—";
-                      const channel = meta.channel || (log.actionCategory?.includes("USSD") ? "USSD" : "Admin");
+                  <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.04]">
+                    {filteredActivities.length > 0 ? (
+                      filteredActivities.map((log: any, i: number) => {
+                        const isCredit = log.accountingEntry === "CREDIT";
+                        const meta = log.metadata as any || {};
+                        const productName = meta.productName || log.description || "System Event";
+                        const channel = meta.channel || (log.actionCategory?.includes("USSD") ? "USSD" : "Admin");
 
-                      // For grouped activity, use the mpesaRef we injected in the service
-                      let receiptStr = log.mpesaRef || meta.mpesaRef || meta.externalReference || "—";
-                      if (receiptStr === "—" && log.description?.includes("Auto-Payout")) {
-                        receiptStr = "Simulated Daraja";
-                      }
-
-                      return (
-                        <TableRow key={i} className="border-b border-gray-100 dark:border-white/5 hover:bg-gray-50 dark:hover:bg-white/[0.02]">
-                          <TableCell className="py-3 px-6 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                            <Link href={`/consumers/${id}/activity/${meta.voucherSerialNumber || log.id}`} className="hover:text-brand-500 transition-colors">
-                              {new Date(log.createdAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
-                            </Link>
-                          </TableCell>
-                          <TableCell className="py-3 px-6 text-sm font-medium text-gray-900 dark:text-gray-200 max-w-[200px] truncate">
-                            {productName}
-                          </TableCell>
-                          <TableCell className="py-3 px-6">
-                            <Badge size="sm" color={channel === "USSD" ? "info" : "light"}>
-                              {channel}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className={`py-3 px-6 text-right text-sm font-bold whitespace-nowrap ${isCredit ? "text-success-600 dark:text-success-500" : "text-error-600 dark:text-error-500"}`}>
-                            {isCredit ? "+" : "-"}{Number(log.pointsAmount || 0).toLocaleString()} pts
-                          </TableCell>
-                          <TableCell className="py-3 px-6">
-                            <Badge size="sm" color={log.journeyComplete ? "success" : "warning"}>
-                              {log.journeyComplete ? "Success" : isCredit ? "Earned" : "Processing"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="py-3 px-6 text-sm text-gray-500 font-mono dark:text-gray-400">
-                            {receiptStr !== "—" ? (
-                              <span className="inline-flex items-center gap-1 text-success-600 dark:text-success-400">
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                {receiptStr}
+                        return (
+                          <TableRow key={log.id || i} className="hover:bg-gray-50/50 dark:hover:bg-white/[0.02] transition-colors cursor-pointer" onClick={() => setSelectedLog(log)}>
+                            <TableCell className="py-3.5 px-6 text-xs text-gray-500 font-medium whitespace-nowrap">
+                              {new Date(log.createdAt).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })}
+                            </TableCell>
+                            <TableCell className="py-3.5 px-6">
+                              <div className="flex items-center gap-3">
+                                <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 border ${isCredit ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20'}`}>
+                                  {isCredit ? <ArrowUpIcon className="w-3.5 h-3.5" /> : <ArrowDownIcon className="w-3.5 h-3.5" />}
+                                </div>
+                                <span className="text-xs font-bold text-gray-900 dark:text-white line-clamp-1">
+                                  {productName}
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="py-3.5 px-6">
+                              <span className="px-2.5 py-0.5 rounded-full bg-gray-100 dark:bg-white/5 text-[11px] font-semibold text-gray-700 dark:text-gray-300">
+                                {channel}
                               </span>
-                            ) : (
-                              "—"
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    }) : (
+                            </TableCell>
+                            <TableCell className={`py-3.5 px-6 text-right font-mono text-xs font-bold ${isCredit ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
+                              {isCredit ? "+" : "-"}{Number(log.pointsAmount || 0).toLocaleString()} <span className="text-[10px] font-sans font-normal opacity-70">PTS</span>
+                            </TableCell>
+                            <TableCell className="py-3.5 px-6">
+                              <Badge size="sm" color={log.journeyComplete !== false ? "success" : "warning"}>
+                                {log.journeyComplete !== false ? "Success" : "Pending"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="py-3.5 px-6 text-right">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setSelectedLog(log); }}
+                                className="text-xs font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 transition"
+                              >
+                                Details →
+                              </button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
+                    ) : (
                       <TableRow>
-                        <TableCell colSpan={6} className="py-12 text-center text-sm text-gray-500">No activity recorded yet</TableCell>
+                        <TableCell colSpan={6} className="py-12 text-center text-xs font-semibold text-gray-400 italic">
+                          No activity telemetry records found matching filter criteria.
+                        </TableCell>
                       </TableRow>
                     )}
                   </TableBody>
                 </Table>
               </div>
-              {activity.total > 8 && (
-                <div className="flex items-center justify-between border-t border-gray-100 px-6 py-3 dark:border-white/5">
-                  <span className="text-sm text-gray-500 dark:text-gray-400">Page {activityPage}</span>
-                  <div className="flex items-center gap-2">
-                    <button disabled={activityPage === 1} onClick={() => setActivityPage(p => Math.max(1, p - 1))} className="rounded-md border border-gray-300 bg-white px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-white/5 dark:border-white/10 dark:text-gray-300 dark:hover:bg-white/10">Previous</button>
-                    <button disabled={activityPage * 8 >= activity.total} onClick={() => setActivityPage(p => p + 1)} className="rounded-md border border-gray-300 bg-white px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-white/5 dark:border-white/10 dark:text-gray-300 dark:hover:bg-white/10">Next</button>
-                  </div>
+
+              {/* ── Innovative Activity Pagination Bar ────────────────────────────── */}
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between px-6 py-3.5 border-t border-gray-100 dark:border-white/5 gap-3">
+                <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">
+                  Showing Page {activityPage} of {totalPages || 1} • {activity?.total || rawActivities.length} Total Telemetry Records
+                </span>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    disabled={activityPage <= 1}
+                    onClick={() => setActivityPage(p => Math.max(1, p - 1))}
+                    className="px-3.5 py-1.5 text-xs font-semibold rounded-xl bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-gray-300 hover:bg-gray-200 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Previous
+                  </button>
+                  
+                  {/* Direct Page Badges */}
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => i + 1).map(pNum => (
+                    <button
+                      key={pNum}
+                      onClick={() => setActivityPage(pNum)}
+                      className={`w-7 h-7 rounded-xl text-xs font-semibold transition flex items-center justify-center ${activityPage === pNum ? "bg-brand-600 text-white shadow-2xs" : "bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-gray-400 hover:bg-gray-200"}`}
+                    >
+                      {pNum}
+                    </button>
+                  ))}
+
+                  <button
+                    disabled={activityPage >= totalPages}
+                    onClick={() => setActivityPage(p => Math.min(totalPages, p + 1))}
+                    className="px-3.5 py-1.5 text-xs font-semibold rounded-xl bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-gray-300 hover:bg-gray-200 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Next
+                  </button>
                 </div>
-              )}
+              </div>
+
             </div>
+
           </div>
 
-          {/* Right column — Analytics */}
+          {/* Right Column (4 Columns) */}
           <div className="col-span-12 space-y-6 xl:col-span-4">
+
             {/* Lifetime Metrics */}
-            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-[#18181b]">
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4">Lifetime metrics</h3>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center border-b border-gray-50 pb-3 dark:border-white/5">
-                  <span className="text-sm text-gray-500 dark:text-gray-400">Total earned</span>
-                  <span className="text-sm font-medium text-gray-900 dark:text-gray-200">{Number(consumer.totalPointsEarnedLifetime || 0).toLocaleString()} pts</span>
+            <div className="bg-white dark:bg-white/[0.02] border border-gray-200/80 dark:border-white/[0.06] p-6 rounded-2xl shadow-sm space-y-4">
+              <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-white/5 pb-3">Lifetime Telemetry</h3>
+              <div className="space-y-3 text-xs">
+                <div className="flex justify-between items-center p-2.5 rounded-xl bg-gray-50/50 dark:bg-white/[0.01]">
+                  <span className="font-medium text-gray-500">Total Points Earned</span>
+                  <span className="font-mono font-bold text-gray-900 dark:text-white">{Number(consumer.totalPointsEarnedLifetime || 0).toLocaleString()} PTS</span>
                 </div>
-                <div className="flex justify-between items-center border-b border-gray-50 pb-3 dark:border-white/5">
-                  <span className="text-sm text-gray-500 dark:text-gray-400">Total spent</span>
-                  <span className="text-sm font-medium text-gray-900 dark:text-gray-200">KES {Number(consumer.totalSpent || 0).toLocaleString()}</span>
+                <div className="flex justify-between items-center p-2.5 rounded-xl bg-gray-50/50 dark:bg-white/[0.01]">
+                  <span className="font-medium text-gray-500">Total Value Spent</span>
+                  <span className="font-mono font-bold text-emerald-500">KES {Number(consumer.totalSpent || 0).toLocaleString()}</span>
                 </div>
-                <div className="flex justify-between items-center border-b border-gray-50 pb-3 dark:border-white/5">
-                  <span className="text-sm text-gray-500 dark:text-gray-400">Purchase frequency</span>
-                  <span className="text-sm font-medium text-gray-900 dark:text-gray-200">{analytics?.purchaseFrequency || 0}/mo</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-500 dark:text-gray-400">Total transactions</span>
-                  <span className="text-sm font-medium text-gray-900 dark:text-gray-200">{analytics?.totalTransactions || 0}</span>
+                <div className="flex justify-between items-center p-2.5 rounded-xl bg-gray-50/50 dark:bg-white/[0.01]">
+                  <span className="font-medium text-gray-500">Purchase Frequency</span>
+                  <span className="font-mono font-bold text-gray-900 dark:text-white">{analytics?.purchaseFrequency || 0}/mo</span>
                 </div>
               </div>
             </div>
 
-            {/* Top Products */}
-            <div className="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#18181b]">
-              <div className="border-b border-gray-100 px-6 py-4 dark:border-white/5">
-                <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Top products</h3>
-              </div>
-              <div className="p-4">
-                {analytics?.topProducts && analytics.topProducts.length > 0 ? (
-                  <div className="space-y-3">
-                    {analytics.topProducts.map((p: any, i: number) => (
-                      <div key={i} className="flex items-center justify-between rounded-md border border-gray-100 bg-gray-50 p-3 dark:border-white/5 dark:bg-white/5">
-                        <div className="flex items-center gap-3">
-                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-bold text-brand-700 dark:bg-brand-500/20 dark:text-brand-400">
-                            {i + 1}
-                          </span>
-                          <span className="text-sm font-medium text-gray-900 dark:text-white truncate max-w-[140px]">
-                            {p.name}
-                          </span>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm font-medium text-gray-900 dark:text-gray-200">{p.count}x</p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">{Number(p.totalPoints).toLocaleString()} pts</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">No product data yet</p>
-                )}
-              </div>
+            {/* Risk Score */}
+            <div className="bg-gradient-to-br from-gray-900 via-gray-950 to-black border border-gray-800 p-6 rounded-2xl text-white shadow-xl space-y-2">
+              <span className="text-xs font-semibold text-brand-400">Participant Engagement</span>
+              <p className="text-2xl font-bold font-mono text-white">{consumer.riskScore || 0}<span className="text-xs font-normal text-gray-400">/100</span></p>
+              <p className="text-xs text-gray-400 leading-relaxed">
+                Calculated based on purchase frequency, USSD interaction velocity, and redemption behavior.
+              </p>
             </div>
 
-            {/* Risk & Engagement */}
-            <div className="relative overflow-hidden rounded-lg bg-gray-900 p-6 text-white shadow-sm dark:bg-[#121212] dark:border dark:border-white/10">
-              <div className="relative z-10">
-                <h4 className="text-xs font-semibold uppercase tracking-wider text-brand-400">Engagement score</h4>
-                <p className="mt-2 text-3xl font-bold">{consumer.riskScore || 0}<span className="text-sm font-normal text-gray-400">/100</span></p>
-                <p className="mt-2 text-sm text-gray-400">
-                  Risk and engagement are computed based on purchase patterns, frequency, and redemption behavior.
-                </p>
-              </div>
-              <div className="absolute -right-8 -bottom-8 h-32 w-32 rounded-full bg-brand-500/20 blur-2xl pointer-events-none"></div>
-            </div>
           </div>
         </div>
       )}
 
-      {/* 2. Identity & Profile Tab */}
+      {/* ── TAB 2: ENHANCED IDENTITY & PROFILE ──────────────────────────────── */}
       {activeTab === "identity" && (
         <div className="grid grid-cols-12 gap-6">
+
+          {/* Left Side (8 Columns) */}
           <div className="col-span-12 xl:col-span-8 space-y-6">
-            {/* Personal Details */}
-            <div className="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#18181b]">
-              <div className="border-b border-gray-100 px-6 py-5 dark:border-white/5">
-                <h3 className="text-base font-semibold text-gray-900 dark:text-white">Personal & contact details</h3>
+
+            {/* Personal & Demographics Card */}
+            <div className="bg-white dark:bg-white/[0.02] border border-gray-200/80 dark:border-white/[0.06] rounded-2xl p-6 shadow-sm space-y-4">
+              <div className="flex items-center justify-between border-b border-gray-100 dark:border-white/5 pb-3">
+                <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                  <svg className="w-4 h-4 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                  Personal Details &amp; Demographics
+                </h3>
               </div>
-              <div className="px-6 py-2">
-                <DetailItem label="First name" value={consumer.firstName} isEditing={isEditing} field="firstName" data={editData} setData={setEditData} />
-                <DetailItem label="Last name" value={consumer.lastName} isEditing={isEditing} field="lastName" data={editData} setData={setEditData} />
-                <DetailItem label="Phone number" value={consumer.phoneNumber} isEditing={isEditing} field="phoneNumber" data={editData} setData={setEditData} />
-                <DetailItem label="Email address" value={consumer.email} isEditing={isEditing} field="email" data={editData} setData={setEditData} type="email" />
-                <DetailItem label="National ID" value={consumer.idNumber} isEditing={isEditing} field="idNumber" data={editData} setData={setEditData} hint="6-8 digits" />
-                <DetailItem label="Tax PIN" value={consumer.taxPin} isEditing={isEditing} field="taxPin" data={editData} setData={setEditData} />
-                <DetailItem label="Gender" value={consumer.gender} isEditing={isEditing} field="gender" data={editData} setData={setEditData} type="select" options={[{ value: "MALE", label: "Male" }, { value: "FEMALE", label: "Female" }, { value: "OTHER", label: "Other" }]} />
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <DetailItem label="First Name" value={consumer.firstName} isEditing={isEditing} field="firstName" data={editData} setData={setEditData} />
+                <DetailItem label="Last Name" value={consumer.lastName} isEditing={isEditing} field="lastName" data={editData} setData={setEditData} />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <DetailItem label="Gender" value={formatEnumValue(consumer.gender)} rawValue={consumer.gender} isEditing={isEditing} field="gender" data={editData} setData={setEditData} type="select" options={[{ value: "MALE", label: "Male" }, { value: "FEMALE", label: "Female" }, { value: "OTHER", label: "Other" }]} />
+                <DetailItem label="Date of Birth" value={consumer.dateOfBirth} isEditing={isEditing} field="dateOfBirth" data={editData} setData={setEditData} type="date" />
               </div>
             </div>
 
-            {/* Location — Smart Town/Region */}
-            <div className="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#18181b]">
-              <div className="border-b border-gray-100 px-6 py-5 dark:border-white/5">
-                <h3 className="text-base font-semibold text-gray-900 dark:text-white">Location & geography</h3>
-                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Select a region to filter towns, or select a town to auto-fill the region.</p>
+            {/* Government & Compliance KYC Card */}
+            <div className="bg-white dark:bg-white/[0.02] border border-gray-200/80 dark:border-white/[0.06] rounded-2xl p-6 shadow-sm space-y-4">
+              <div className="flex items-center justify-between border-b border-gray-100 dark:border-white/5 pb-3">
+                <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                  <svg className="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+                  Compliance &amp; KYC Verification
+                </h3>
               </div>
-              <div className="px-6 py-4 space-y-4">
-                <div className="flex flex-col gap-1.5">
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Region</span>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <DetailItem label="National ID Number" value={consumer.idNumber} isEditing={isEditing} field="idNumber" data={editData} setData={setEditData} hint="6-8 digits" />
+                <DetailItem label="KRA Tax PIN" value={consumer.taxPin} isEditing={isEditing} field="taxPin" data={editData} setData={setEditData} hint="A123456789Z" />
+              </div>
+            </div>
+
+          </div>
+
+          {/* Right Side (4 Columns) */}
+          <div className="col-span-12 xl:col-span-4 space-y-6">
+
+            {/* Contact & Telemetry Card */}
+            <div className="bg-white dark:bg-white/[0.02] border border-gray-200/80 dark:border-white/[0.06] rounded-2xl p-6 shadow-sm space-y-3">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white border-b border-gray-100 dark:border-white/5 pb-3 flex items-center gap-2">
+                <svg className="w-4 h-4 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                Contact Telemetry
+              </h3>
+              <DetailItem label="Phone Number" value={consumer.phoneNumber} isEditing={isEditing} field="phoneNumber" data={editData} setData={setEditData} />
+              <DetailItem label="Email Address" value={consumer.email} isEditing={isEditing} field="email" data={editData} setData={setEditData} type="email" />
+            </div>
+
+            {/* Location & Territory Card */}
+            <div className="bg-white dark:bg-white/[0.02] border border-gray-200/80 dark:border-white/[0.06] rounded-2xl p-6 shadow-sm space-y-3">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white border-b border-gray-100 dark:border-white/5 pb-3 flex items-center gap-2">
+                <svg className="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                Territory &amp; Location
+              </h3>
+              <div className="space-y-3">
+                <div className="flex flex-col gap-1 py-1">
+                  <span className="text-xs font-semibold text-gray-500">Region</span>
                   {isEditing ? (
                     <ModernSelect
                       options={(regions || []).map((r: any) => ({ value: r.id, label: r.name }))}
                       value={selectedRegionId}
                       onChange={handleRegionChange}
-                      placeholder="Select region (filters towns below)"
+                      placeholder="Select region"
                     />
                   ) : (
-                    <span className="text-sm text-gray-900 font-medium dark:text-gray-200">
-                      {consumer.town?.regionName || (regions || []).find((r: any) => r.id === selectedRegionId)?.name || "Not set"}
+                    <span className="text-xs font-semibold text-gray-900 dark:text-white">
+                      {consumer.town?.regionName || (regions || []).find((r: any) => r.id === selectedRegionId)?.name || "Unassigned"}
                     </span>
                   )}
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Town</span>
+
+                <div className="flex flex-col gap-1 py-1">
+                  <span className="text-xs font-semibold text-gray-500">Town / City</span>
                   {isEditing ? (
                     <ModernSelect
                       options={filteredTowns.map((t: any) => ({ value: t.id, label: t.name }))}
                       value={editData.townId || ""}
                       onChange={handleTownChange}
-                      placeholder={selectedRegionId ? "Select town" : "Select a region first"}
+                      placeholder={selectedRegionId ? "Select town" : "Select region first"}
                     />
                   ) : (
-                    <span className="text-sm text-gray-900 font-medium dark:text-gray-200">
-                      {consumer.town?.name || "Not set"}
+                    <span className="text-xs font-semibold text-gray-900 dark:text-white">
+                      {consumer.town?.name || "Unassigned"}
                     </span>
                   )}
                 </div>
               </div>
             </div>
+
+            {/* System Attributes & Role Card */}
+            <div className="bg-white dark:bg-white/[0.02] border border-gray-200/80 dark:border-white/[0.06] rounded-2xl p-6 shadow-sm space-y-3">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white border-b border-gray-100 dark:border-white/5 pb-3">Role &amp; System Tags</h3>
+              <DetailItem label="Consumer Type" value={formatEnumValue(consumer.consumerType)} isEditing={false} field="consumerType" data={editData} setData={setEditData} />
+              <DetailItem label="Physical Tag ID" value={consumer.physicalTagId} isEditing={isEditing} field="physicalTagId" data={editData} setData={setEditData} />
+            </div>
+
           </div>
+        </div>
+      )}
 
-          {/* Right column — Org, Sales, System */}
-          <div className="col-span-12 xl:col-span-4 space-y-6">
-            {/* Organization Link */}
-            <div className="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#18181b]">
-              <div className="border-b border-gray-100 px-6 py-5 dark:border-white/5">
-                <h3 className="text-base font-semibold text-gray-900 dark:text-white">Organization</h3>
-                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Link this consumer to a dealer, distributor, or contractor.</p>
-              </div>
-              <div className="px-6 py-4">
-                {isEditing ? (
-                  <ModernSelect
-                    options={(organizations || []).map((o: any) => ({ value: o.id, label: `${o.name} (${o.type})` }))}
-                    value={editData.dealerOrganizationId || ""}
-                    onChange={(val) => setEditData({ ...editData, dealerOrganizationId: val })}
-                    placeholder="Select organization"
-                  />
-                ) : (
-                  <div className="flex items-center gap-3">
-                    {consumer.dealerOrganizationId ? (
-                      <>
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-100 text-xs font-semibold text-amber-700 dark:bg-amber-500/20 dark:text-amber-400">
-                          {(organizations || []).find((o: any) => o.id === consumer.dealerOrganizationId)?.name?.charAt(0) || "O"}
-                        </div>
-                        <span className="text-sm font-medium text-gray-900 dark:text-white">
-                          {(organizations || []).find((o: any) => o.id === consumer.dealerOrganizationId)?.name || "Unknown"}
-                        </span>
-                      </>
-                    ) : (
-                      <span className="text-sm text-gray-400">Not linked to any organization</span>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Sales Person */}
-            <div className="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#18181b]">
-              <div className="border-b border-gray-100 px-6 py-5 dark:border-white/5">
-                <h3 className="text-base font-semibold text-gray-900 dark:text-white">Assigned sales person</h3>
-              </div>
-              <div className="px-6 py-4">
-                {isEditing ? (
-                  <ModernSelect
-                    options={(salesStaff || []).map((s: any) => ({ value: s.id, label: `${s.name} (${s.role?.replace(/_/g, " ")})` }))}
-                    value={editData.onboardedByAgentId || ""}
-                    onChange={(val) => setEditData({ ...editData, onboardedByAgentId: val })}
-                    placeholder="Select sales person"
-                  />
-                ) : (
-                  <div className="flex items-center gap-3">
-                    {consumer.onboardedByAgentId ? (
-                      <>
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs font-semibold text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-400">
-                          {(salesStaff || []).find((s: any) => s.id === consumer.onboardedByAgentId)?.name?.charAt(0) || "S"}
-                        </div>
-                        <span className="text-sm font-medium text-gray-900 dark:text-white">
-                          {(salesStaff || []).find((s: any) => s.id === consumer.onboardedByAgentId)?.name || "Unknown"}
-                        </span>
-                      </>
-                    ) : (
-                      <span className="text-sm text-gray-400">No sales person assigned</span>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* System Context */}
-            <div className="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#18181b]">
-              <div className="border-b border-gray-100 px-6 py-5 dark:border-white/5">
-                <h3 className="text-base font-semibold text-gray-900 dark:text-white">System context</h3>
-              </div>
-              <div className="px-6 py-2">
-                <DetailItem label="Consumer type" value={consumer.consumerType} isEditing={false} field="consumerType" data={editData} setData={setEditData} />
-                <DetailItem label="Physical tag ID" value={consumer.physicalTagId} isEditing={isEditing} field="physicalTagId" data={editData} setData={setEditData} />
-              </div>
+      {/* ── TAB 3: SECURITY & PERMISSIONS ─────────────────────────────────── */}
+      {activeTab === "permissions" && (
+        <div className="grid grid-cols-12 gap-6">
+          <div className="col-span-12 xl:col-span-8 space-y-6">
+            <div className="bg-white dark:bg-white/[0.02] border border-gray-200/80 dark:border-white/[0.06] rounded-2xl p-6 shadow-sm space-y-2">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white border-b border-gray-100 dark:border-white/5 pb-3">Account Security Controls</h3>
+              <ControlItem
+                title="Account Status"
+                description="Controls overall system access for this participant."
+                isEditing={isEditing} field="status" data={editData} setData={setEditData}
+                options={[
+                  { value: "active", label: "Active" },
+                  { value: "suspended", label: "Suspended" },
+                  { value: "blocked", label: "Blocked" }
+                ]}
+              />
+              <ControlItem
+                title="Points Earning Capability"
+                description="Allow participant to accumulate loyalty points."
+                isEditing={isEditing} field="canEarnPoints" data={editData} setData={setEditData}
+                isBoolean
+              />
+              <ControlItem
+                title="Points Redemption Capability"
+                description="Allow participant to claim M-Pesa disbursements or gifts."
+                isEditing={isEditing} field="canRedeemPoints" data={editData} setData={setEditData}
+                isBoolean
+              />
+              <ControlItem
+                title="Points Banking Module"
+                description="Enable participant to save points for long-term rewards."
+                isEditing={isEditing} field="bankingEnabled" data={editData} setData={setEditData}
+                isBoolean
+              />
             </div>
           </div>
         </div>
       )}
 
-      {/* 3. Permissions & Security Tab */}
-      {activeTab === "permissions" && (
-        <div className="grid grid-cols-12 gap-6">
-          <div className="col-span-12 xl:col-span-8 space-y-6">
-            <div className="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#18181b]">
-              <div className="border-b border-gray-100 px-6 py-5 dark:border-white/5">
-                <h3 className="text-base font-semibold text-gray-900 dark:text-white">Account controls</h3>
-                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Manage access and point operations for this user.</p>
+      {/* ── Innovative Activity Inspection Modal ───────────────────────────── */}
+      {selectedLog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white dark:bg-[#18181b] border border-gray-200 dark:border-white/10 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 relative">
+            <div className="flex items-center justify-between border-b border-gray-100 dark:border-white/5 pb-3">
+              <div className="flex items-center gap-3">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 border ${selectedLog.accountingEntry === 'CREDIT' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20'}`}>
+                  {selectedLog.accountingEntry === 'CREDIT' ? <ArrowUpIcon className="w-4 h-4" /> : <ArrowDownIcon className="w-4 h-4" />}
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900 dark:text-white">Telemetry Entry Details</h3>
+                  <p className="text-[11px] font-mono text-gray-400">Log ID: {selectedLog.id}</p>
+                </div>
               </div>
-              <div className="px-6 py-2">
-                <ControlItem
-                  title="Account status"
-                  description="Determines if the user can access the platform."
-                  isEditing={isEditing} field="status" data={editData} setData={setEditData}
-                  options={[
-                    { value: "active", label: "Active" },
-                    { value: "suspended", label: "Suspended" },
-                    { value: "blocked", label: "Blocked" }
-                  ]}
-                />
-                <ControlItem
-                  title="Earning capability"
-                  description="Allow the user to earn points from campaigns."
-                  isEditing={isEditing} field="canEarnPoints" data={editData} setData={setEditData}
-                  isBoolean
-                />
-                <ControlItem
-                  title="Redemption capability"
-                  description="Allow the user to redeem points for gifts or cash."
-                  isEditing={isEditing} field="canRedeemPoints" data={editData} setData={setEditData}
-                  isBoolean
-                />
-                <ControlItem
-                  title="Points banking"
-                  description="Allow the user to safely bank points for future use."
-                  isEditing={isEditing} field="bankingEnabled" data={editData} setData={setEditData}
-                  isBoolean
-                />
+              <button
+                onClick={() => setSelectedLog(null)}
+                className="w-8 h-8 rounded-xl bg-gray-100 dark:bg-white/5 hover:bg-gray-200 text-gray-500 flex items-center justify-center transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex justify-between items-center p-3 rounded-xl bg-gray-50 dark:bg-white/[0.03] border border-gray-100 dark:border-white/5">
+                <span className="text-xs text-gray-500">Transaction Points</span>
+                <span className={`text-sm font-bold font-mono ${selectedLog.accountingEntry === 'CREDIT' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                  {selectedLog.accountingEntry === 'CREDIT' ? '+' : '-'}{Number(selectedLog.pointsAmount || 0).toLocaleString()} PTS
+                </span>
               </div>
+
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="p-3 rounded-xl bg-gray-50 dark:bg-white/[0.03] border border-gray-100 dark:border-white/5">
+                  <span className="text-gray-400 block text-[10px] uppercase font-semibold">Action Category</span>
+                  <span className="font-bold text-gray-900 dark:text-white">{selectedLog.actionCategory}</span>
+                </div>
+                <div className="p-3 rounded-xl bg-gray-50 dark:bg-white/[0.03] border border-gray-100 dark:border-white/5">
+                  <span className="text-gray-400 block text-[10px] uppercase font-semibold">Timestamp</span>
+                  <span className="font-bold text-gray-900 dark:text-white">{new Date(selectedLog.createdAt).toLocaleString()}</span>
+                </div>
+              </div>
+
+              {selectedLog.metadata && (
+                <div className="space-y-1">
+                  <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">Contextual Metadata Payload</span>
+                  <pre className="text-[11px] p-3 bg-gray-900 text-emerald-400 rounded-xl font-mono overflow-x-auto max-h-40">
+                    {JSON.stringify(selectedLog.metadata, null, 2)}
+                  </pre>
+                </div>
+              )}
+            </div>
+
+            <div className="pt-2 flex justify-end gap-2">
+              {selectedLog.id && (
+                <Link
+                  href={`/transactions/${selectedLog.id}`}
+                  className="px-4 py-2 bg-brand-600 text-white text-xs font-semibold rounded-xl hover:bg-brand-700 transition shadow-md shadow-brand-500/20"
+                >
+                  View Full Ledger Transaction →
+                </Link>
+              )}
             </div>
           </div>
         </div>
@@ -612,9 +692,7 @@ export default function ConsumerDetail({ params }: PageProps) {
   );
 }
 
-// ─── Reusable Components ─────────────────────────────────────────────────────
-
-function DetailItem({ label, value, isEditing, field, data, setData, type = "text", hint, options }: any) {
+function DetailItem({ label, value, rawValue, isEditing, field, data, setData, type = "text", hint, options }: any) {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let val = e.target.value;
     if (field === "idNumber") val = val.replace(/\D/g, "");
@@ -623,27 +701,23 @@ function DetailItem({ label, value, isEditing, field, data, setData, type = "tex
   };
 
   return (
-    <div className={`flex ${isEditing ? 'flex-col gap-1.5 py-3' : 'flex-col sm:flex-row sm:justify-between sm:items-center py-3.5'} border-b border-gray-50 last:border-0 dark:border-white/5`}>
-      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{label}</span>
+    <div className="flex flex-col gap-1 py-2 border-b border-gray-100 dark:border-white/5 last:border-0">
+      <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">{label}</span>
       {isEditing ? (
         type === "select" ? (
-          <div className="w-full sm:w-2/3">
-            <ModernSelect options={options || []} value={data[field] || ""} onChange={(val) => setData({ ...data, [field]: val })} placeholder={`Select ${label.toLowerCase()}`} />
-          </div>
+          <ModernSelect options={options || []} value={data[field] || rawValue || ""} onChange={(val) => setData({ ...data, [field]: val })} placeholder={`Select ${label.toLowerCase()}`} />
         ) : (
-          <div className="relative w-full sm:w-2/3">
-            <input
-              type={type}
-              maxLength={field === "idNumber" ? 8 : field === "taxPin" ? 11 : undefined}
-              placeholder={hint || `Enter ${label.toLowerCase()}`}
-              value={data[field] || ""}
-              onChange={handleChange}
-              className="h-10 w-full rounded-md border border-gray-300 bg-white px-3 text-sm text-gray-900 shadow-sm transition-colors placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30"
-            />
-          </div>
+          <input
+            type={type}
+            maxLength={field === "idNumber" ? 8 : field === "taxPin" ? 11 : undefined}
+            placeholder={hint || `Enter ${label.toLowerCase()}`}
+            value={data[field] || ""}
+            onChange={handleChange}
+            className="w-full px-3 py-1.5 bg-gray-50 dark:bg-white/[0.03] border border-gray-200 dark:border-white/10 rounded-xl text-xs font-semibold text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500/40"
+          />
         )
       ) : (
-        <span className={`text-sm mt-1 sm:mt-0 ${!value ? "text-gray-400 font-normal" : "text-gray-900 font-medium dark:text-gray-200"}`}>
+        <span className={`text-xs mt-0.5 ${!value ? "text-gray-400 font-normal italic" : "text-gray-900 dark:text-white font-semibold"}`}>
           {value || "Not provided"}
         </span>
       )}
@@ -652,33 +726,55 @@ function DetailItem({ label, value, isEditing, field, data, setData, type = "tex
 }
 
 function ControlItem({ title, description, isEditing, field, data, setData, options, isBoolean }: any) {
-  const displayValue = isBoolean
-    ? (data[field] ? "Allowed" : "Disabled")
-    : (options?.find((o: any) => o.value === data[field])?.label || data[field]);
+  const isChecked = Boolean(data[field]);
+
+  const handleToggle = () => {
+    setData({ ...data, [field]: !isChecked });
+  };
 
   return (
-    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center py-4 border-b border-gray-50 last:border-0 dark:border-white/5 gap-4">
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between py-3.5 border-b border-gray-100 dark:border-white/5 last:border-0 gap-3">
       <div>
-        <h4 className="text-sm font-medium text-gray-900 dark:text-white">{title}</h4>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{description}</p>
+        <h4 className="text-xs font-bold text-gray-900 dark:text-white">{title}</h4>
+        <p className="text-[11px] text-gray-400 mt-0.5">{description}</p>
       </div>
-      <div className="shrink-0 w-full sm:w-48">
-        {isEditing ? (
-          <ModernSelect
-            options={isBoolean ? [{ value: true, label: "Allowed" }, { value: false, label: "Disabled" }] : options}
-            value={data[field]}
-            onChange={(val) => setData({ ...data, [field]: val })}
-            placeholder="Select status"
-          />
-        ) : (
-          <div className="flex justify-end">
-            <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium border ${data[field] === false || data[field] === "blocked" || data[field] === "suspended"
-              ? "bg-error-50 text-error-700 border-error-100 dark:bg-error-500/10 dark:text-error-400 dark:border-error-500/20"
-              : "bg-gray-50 text-gray-700 border-gray-200 dark:bg-white/5 dark:text-gray-300 dark:border-white/10"
-              }`}>
-              {displayValue || "Not set"}
+      <div className="shrink-0 flex items-center justify-end">
+        {isBoolean ? (
+          <div className="flex items-center gap-3">
+            <span className={`text-xs font-semibold ${isChecked ? "text-emerald-500" : "text-gray-400"}`}>
+              {isChecked ? "Allowed" : "Disabled"}
             </span>
+            <button
+              type="button"
+              onClick={handleToggle}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                isChecked ? "bg-brand-500" : "bg-gray-200 dark:bg-white/10"
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                  isChecked ? "translate-x-5" : "translate-x-0"
+                }`}
+              />
+            </button>
           </div>
+        ) : isEditing ? (
+          <div className="w-40">
+            <ModernSelect
+              options={options}
+              value={data[field]}
+              onChange={(val) => setData({ ...data, [field]: val })}
+              placeholder="Select status"
+            />
+          </div>
+        ) : (
+          <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold ${
+            data[field] === "active"
+              ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20"
+              : "bg-rose-500/10 text-rose-500 border border-rose-500/20"
+          }`}>
+            {options?.find((o: any) => o.value === data[field])?.label || formatEnumValue(data[field]) || "Active"}
+          </span>
         )}
       </div>
     </div>

@@ -7,7 +7,6 @@ import { useState, useMemo } from "react";
 import { Dropdown } from "../ui/dropdown/Dropdown";
 import { useApi } from "@/hooks/useApi";
 
-// Dynamically import the ReactApexChart component
 const ReactApexChart = dynamic(() => import("react-apexcharts"), {
   ssr: false,
 });
@@ -16,11 +15,8 @@ export default function CampaignPointsChart() {
   const { data: stats, isLoading } = useApi("/loyalty/stats/overview");
   const [isOpen, setIsOpen] = useState(false);
 
-  // Process chart data from API
   const { categories, series } = useMemo(() => {
     const rawData = stats?.chartData || [];
-    
-    // Group by month
     const monthsSet = new Set<string>();
     const creditMap: Record<string, number> = {};
     const debitMap: Record<string, number> = {};
@@ -51,7 +47,7 @@ export default function CampaignPointsChart() {
   const options: ApexOptions = {
     colors: ["#217a99", "#88c2d8"],
     chart: {
-      fontFamily: "Satoshi, sans-serif",
+      fontFamily: "inherit",
       type: "bar",
       height: 280,
       toolbar: {
@@ -61,8 +57,8 @@ export default function CampaignPointsChart() {
     plotOptions: {
       bar: {
         horizontal: false,
-        columnWidth: "50%",
-        borderRadius: 5,
+        columnWidth: "48%",
+        borderRadius: 6,
         borderRadiusApplication: "end",
       },
     },
@@ -71,7 +67,7 @@ export default function CampaignPointsChart() {
     },
     stroke: {
       show: true,
-      width: 4,
+      width: 3,
       colors: ["transparent"],
     },
     xaxis: {
@@ -87,87 +83,64 @@ export default function CampaignPointsChart() {
       show: true,
       position: "top",
       horizontalAlign: "left",
-      fontFamily: "Satoshi",
+      fontSize: "11px",
+      fontWeight: 600,
     },
     yaxis: {
-      title: {
-        text: undefined,
-      },
       labels: {
         formatter: (val) => val >= 1000 ? `${(val / 1000).toFixed(0)}k` : val.toString(),
       }
     },
     grid: {
-      yaxis: {
-        lines: {
-          show: true,
-        },
-      },
+      borderColor: "rgba(148, 163, 184, 0.1)",
+      strokeDashArray: 3,
     },
     fill: {
       opacity: 1,
     },
     tooltip: {
-      x: {
-        show: true,
-      },
       y: {
-        formatter: (val: number) => `${val.toLocaleString()} pts`,
+        formatter: (val: number) => `${val.toLocaleString()} PTS`,
       },
     },
   };
 
-  function toggleDropdown() {
-    setIsOpen(!isOpen);
-  }
-
-  function closeDropdown() {
-    setIsOpen(false);
-  }
-
-  if (isLoading) {
-    return (
-      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-white/[0.03]">
-        <div className="h-6 w-32 bg-gray-100 dark:bg-white/5 rounded animate-pulse mb-6"></div>
-        <div className="h-64 w-full bg-gray-50 dark:bg-white/5 rounded animate-pulse"></div>
-      </div>
-    );
-  }
-
   return (
-    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6 flex flex-col h-full">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
-          Points Dynamics
-        </h3>
+    <div className="overflow-hidden rounded-2xl border border-gray-200/80 bg-white p-5 dark:border-white/[0.06] dark:bg-white/[0.02] flex flex-col h-full shadow-sm">
+      <div className="flex items-center justify-between border-b border-gray-100 dark:border-white/5 pb-3 mb-2">
+        <div className="flex items-center gap-2">
+          <span className="p-1 bg-brand-500/10 text-brand-600 rounded text-xs">📊</span>
+          <h3 className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+            Monthly Points Emission &amp; Redemption Velocity
+          </h3>
+        </div>
 
         <div className="relative inline-block">
-          <button onClick={toggleDropdown} className="dropdown-toggle">
-            <MoreDotIcon className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-300" />
+          <button onClick={() => setIsOpen(!isOpen)} className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 transition">
+            <MoreDotIcon className="w-4 h-4 text-gray-400" />
           </button>
-          <Dropdown
-            isOpen={isOpen}
-            onClose={closeDropdown}
-            className="w-40 p-2"
-          >
-            <DropdownItem
-              onItemClick={closeDropdown}
-              className="flex w-full font-normal text-left text-gray-500 rounded-lg hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-300"
-            >
-              Sync Data
+          <Dropdown isOpen={isOpen} onClose={() => setIsOpen(false)} className="w-36 p-1">
+            <DropdownItem onItemClick={() => setIsOpen(false)} className="text-xs">
+              Sync Telemetry
             </DropdownItem>
           </Dropdown>
         </div>
       </div>
 
-      <div className="max-w-full overflow-x-auto custom-scrollbar">
-        <div className="-ml-5 min-w-[650px] xl:min-w-full pl-2">
-          <ReactApexChart
-            options={options}
-            series={series}
-            type="bar"
-            height={280}
-          />
+      <div className="max-w-full overflow-x-auto custom-scrollbar flex-1">
+        <div className="-ml-3 min-w-[500px] xl:min-w-full">
+          {isLoading ? (
+            <div className="h-64 w-full bg-gray-50 dark:bg-white/5 rounded-xl animate-pulse flex items-center justify-center text-xs text-gray-400">
+              Loading Points Velocity...
+            </div>
+          ) : (
+            <ReactApexChart
+              options={options}
+              series={series}
+              type="bar"
+              height={260}
+            />
+          )}
         </div>
       </div>
     </div>

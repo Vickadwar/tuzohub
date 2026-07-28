@@ -10,17 +10,18 @@ interface DatePickerProps {
   onChange: (value: string) => void;
   placeholder?: string;
   className?: string;
+  size?: "sm" | "md";
 }
 
 /**
- * Premium DatePicker Component
- * - Powered by flatpickr with custom styling
+ * High-Density DatePicker Component
  */
 export default function DatePicker({
   value,
   onChange,
   placeholder = "Select date",
   className = "",
+  size = "sm",
 }: DatePickerProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -29,24 +30,26 @@ export default function DatePicker({
       flatpickr(inputRef.current as HTMLInputElement, {
         defaultDate: value,
         dateFormat: "Y-m-d",
-        onChange: (selectedDates, dateStr) => {
+        onChange: (_, dateStr) => {
           onChange(dateStr);
         },
       });
     }
   }, [onChange, value]);
 
+  const heightClass = size === "md" ? "h-10 text-xs" : "h-9 text-xs";
+
   return (
-    <div className={`relative ${className}`}>
-      <div className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none">
-        <CalenderIcon className="w-5 h-5 text-gray-400" />
+    <div className={`relative w-full ${className}`}>
+      <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none z-10">
+        <CalenderIcon className="w-4 h-4 text-gray-400" />
       </div>
       <input
         ref={inputRef}
         type="text"
         placeholder={placeholder}
         defaultValue={value}
-        className="w-full h-11 pl-11 pr-4 rounded-lg border border-gray-200 dark:border-white/[0.08] bg-white dark:bg-white/[0.03] text-[15px] font-medium text-gray-800 dark:text-white/90 placeholder:text-gray-300 dark:placeholder:text-white/20 focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/10 transition shadow-sm cursor-pointer"
+        className={`w-full ${heightClass} pl-9 pr-3 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.03] font-bold text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition cursor-pointer`}
       />
     </div>
   );

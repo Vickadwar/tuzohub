@@ -7,27 +7,25 @@ import ModernSelect from "@/components/ui/ModernSelect";
 import Checkbox from "@/components/form/input/Checkbox";
 import IntegrationsManager from "@/components/admin/settings/IntegrationsManager";
 
-// ─── Reusable Field Component ────────────────────────────────────────
 function Field({ label, hint, action, children }: { label: string; hint?: React.ReactNode; action?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="flex flex-col">
       <div className="mb-1.5 flex items-center justify-between">
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>
+        <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300">{label}</label>
         {action && <div>{action}</div>}
       </div>
       {children}
-      {hint && <div className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">{hint}</div>}
+      {hint && <div className="mt-1.5 text-[11px] text-gray-400">{hint}</div>}
     </div>
   );
 }
 
-// ─── Reusable Form Section ────────────────────────────────────────────────────
 function LocalFormSection({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#18181b]">
-      <div className="border-b border-gray-100 px-6 py-5 dark:border-white/5">
-        <h2 className="text-base font-semibold text-gray-900 dark:text-white">{title}</h2>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{description}</p>
+    <div className="rounded-2xl border border-gray-200/80 bg-white shadow-sm dark:border-white/[0.06] dark:bg-white/[0.02]">
+      <div className="border-b border-gray-100 px-6 py-4 dark:border-white/5">
+        <h2 className="text-sm font-bold text-gray-900 dark:text-white">{title}</h2>
+        <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{description}</p>
       </div>
       <div className="p-6">{children}</div>
     </div>
@@ -38,7 +36,7 @@ function LocalTextInput({ className, ...props }: React.InputHTMLAttributes<HTMLI
   return (
     <input
       {...props}
-      className={`h-10 w-full rounded-md border border-gray-300 bg-white px-3 text-sm text-gray-900 shadow-sm transition-colors placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30 ${className || ""}`}
+      className={`h-10 w-full rounded-xl border border-gray-200 bg-gray-50/50 px-3.5 text-xs font-medium text-gray-900 shadow-2xs transition-colors placeholder:text-gray-400 focus:border-brand-500/40 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/30 dark:border-white/10 dark:bg-white/[0.03] dark:text-white dark:placeholder:text-white/30 dark:focus:bg-transparent ${className || ""}`}
     />
   );
 }
@@ -169,7 +167,7 @@ export default function PlatformSettingsPage() {
       });
 
       if (data.success) {
-        setSuccess("Settings updated successfully!");
+        setSuccess("Platform settings updated successfully!");
       } else {
         setError(data.error || "Failed to update settings.");
       }
@@ -182,72 +180,83 @@ export default function PlatformSettingsPage() {
 
   if (isLoading) {
     return (
-      <div className="mx-auto max-w-[1200px] px-4 pb-12 sm:px-6 lg:px-8 pt-6">
-        <div className="flex items-center justify-center py-20">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-500 border-t-transparent" />
-          <span className="ml-3 text-sm text-gray-500">Loading settings...</span>
-        </div>
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-[1200px] px-4 pb-12 sm:px-6 lg:px-8">
-      {/* ── Header ────────────────────────────────────────────────────────── */}
-      <div className="mb-8 pt-6">
-        <nav className="mb-2 flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-          <Link href="/overview" className="hover:text-brand-600 transition-colors">
-            Dashboard
+    <div className="w-full space-y-6 animate-fadeIn pb-12">
+      {/* ── Page Header ──────────────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-gray-200/80 dark:border-white/[0.06] pb-5">
+        <div className="flex items-center gap-4">
+          <Link
+            href="/overview"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors text-gray-500 dark:text-gray-400"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+            </svg>
           </Link>
-          <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-          </svg>
-          <span className="font-medium text-gray-900 dark:text-gray-200">Organization Settings</span>
-        </nav>
-        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+
+          {/* Rounded Avatar Badge */}
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-500/10 text-brand-600 dark:text-brand-400 font-bold text-xs border border-brand-500/20 shadow-2xs">
+            {tenantSlug?.charAt(0).toUpperCase() || "T"}
+          </div>
+
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
-              Platform Configurations
-            </h1>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              Manage core tenant rules for loyalty programs, security, and branding.
+            <div className="flex items-center gap-3">
+              <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white">
+                Platform Configurations
+              </h1>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-brand-500/10 text-brand-600 dark:text-brand-400 text-xs font-semibold border border-brand-500/20">
+                Setup &amp; Rules
+              </span>
+            </div>
+            <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+              Manage core tenant rules for loyalty programs, security parameters, and branding.
             </p>
           </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => handleSubmit()}
-              disabled={isSubmitting}
-              className="inline-flex items-center justify-center rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 disabled:opacity-60 transition-colors"
-            >
-              {isSubmitting ? "Saving..." : "Save Settings"}
-            </button>
-          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => handleSubmit()}
+            disabled={isSubmitting}
+            className="px-5 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold rounded-xl shadow-md shadow-brand-500/20 transition disabled:opacity-50"
+          >
+            {isSubmitting ? "Saving..." : "Save Settings"}
+          </button>
         </div>
       </div>
 
       {error && (
-        <div className="mb-6 rounded-md bg-error-50 p-4 border border-error-200 dark:bg-error-500/10 dark:border-error-500/20 text-error-700 dark:text-error-400 text-sm">
+        <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-semibold">
           {error}
         </div>
       )}
       
       {success && (
-        <div className="mb-6 rounded-md bg-success-50 p-4 border border-success-200 dark:bg-success-500/10 dark:border-success-500/20 text-success-700 dark:text-success-400 text-sm">
+        <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-semibold">
           {success}
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1fr_320px]">
-        <div className="space-y-6">
+      <div className="grid grid-cols-12 gap-6">
+        
+        {/* Left Column (8 Columns) */}
+        <div className="col-span-12 xl:col-span-8 space-y-6">
+          
           {/* ── Finance & Core ── */}
-          <LocalFormSection title="Finance & Core Setup" description="Primary operating country and currency">
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-              <Field label="Country">
+          <LocalFormSection title="Finance & Core Setup" description="Primary operating country and currency configurations">
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+              <Field label="Operating Country">
                 <ModernSelect
                   options={countriesList.map((c) => ({ value: c.id, label: `${c.name} (${c.code})` }))}
                   value={formData.countryId}
                   onChange={(val) => setFormData({ ...formData, countryId: val })}
-                  placeholder="Select a country"
+                  placeholder="Select country"
                 />
               </Field>
               <Field label="Base Currency">
@@ -276,30 +285,30 @@ export default function PlatformSettingsPage() {
           </LocalFormSection>
 
           {/* ── Consumer Controls ── */}
-          <LocalFormSection title="Consumer Permissions" description="Global toggles for consumer actions">
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-              <div className="flex items-center gap-3">
+          <LocalFormSection title="Consumer Permissions" description="Global toggles for participant capabilities">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50/50 dark:bg-white/[0.01] border border-gray-100 dark:border-white/5">
                 <Checkbox checked={formData.defaultCanEarnPoints} onChange={(val) => setFormData({ ...formData, defaultCanEarnPoints: val })} />
-                <span className="text-sm text-gray-700 dark:text-gray-300">Allow Earning Points</span>
+                <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">Allow Earning Points</span>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50/50 dark:bg-white/[0.01] border border-gray-100 dark:border-white/5">
                 <Checkbox checked={formData.defaultCanRedeemPoints} onChange={(val) => setFormData({ ...formData, defaultCanRedeemPoints: val })} />
-                <span className="text-sm text-gray-700 dark:text-gray-300">Allow Point Redemptions</span>
+                <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">Allow Point Redemptions</span>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50/50 dark:bg-white/[0.01] border border-gray-100 dark:border-white/5">
                 <Checkbox checked={formData.defaultCanBankPoints} onChange={(val) => setFormData({ ...formData, defaultCanBankPoints: val })} />
-                <span className="text-sm text-gray-700 dark:text-gray-300">Enable Point Banking</span>
+                <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">Enable Point Banking</span>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50/50 dark:bg-white/[0.01] border border-gray-100 dark:border-white/5">
                 <Checkbox checked={formData.defaultCanTransferPoints} onChange={(val) => setFormData({ ...formData, defaultCanTransferPoints: val })} />
-                <span className="text-sm text-gray-700 dark:text-gray-300">Enable Peer-to-Peer Transfers</span>
+                <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">Enable Peer-to-Peer Transfers</span>
               </div>
             </div>
           </LocalFormSection>
 
           {/* ── Fraud & Security ── */}
-          <LocalFormSection title="Fraud & Security" description="Rules to prevent system abuse">
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+          <LocalFormSection title="Fraud & Security Controls" description="Rules to prevent unauthorized system access or abuse">
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
               <Field label="Max Failed Redemptions / Hour">
                 <LocalTextInput
                   type="number"
@@ -314,21 +323,21 @@ export default function PlatformSettingsPage() {
                   onChange={(e) => setFormData({ ...formData, maxPointsEarnedPerDay: e.target.value })}
                 />
               </Field>
-              <div className="flex items-center gap-3 pt-6">
+              <div className="flex items-center gap-3 sm:col-span-2 p-3 rounded-xl bg-gray-50/50 dark:bg-white/[0.01] border border-gray-100 dark:border-white/5">
                 <Checkbox checked={formData.requireMfaForRedemption} onChange={(val) => setFormData({ ...formData, requireMfaForRedemption: val })} />
-                <span className="text-sm text-gray-700 dark:text-gray-300">Require MFA for Redemptions</span>
+                <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">Require Multi-Factor Authentication for Redemptions</span>
               </div>
             </div>
           </LocalFormSection>
 
           {/* ── Branding ── */}
-          <LocalFormSection title="Branding & Assets" description="Customize the look and feel of your portal">
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+          <LocalFormSection title="Branding & Assets" description="Customize portal styling and communications header">
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
               <Field label="Brand Primary Color">
                 <div className="flex gap-2">
                   <input
                     type="color"
-                    className="h-10 w-12 rounded border border-gray-300 dark:border-white/10"
+                    className="h-10 w-12 rounded-xl border border-gray-200 dark:border-white/10 shrink-0 cursor-pointer"
                     value={formData.brandPrimaryColor}
                     onChange={(e) => setFormData({ ...formData, brandPrimaryColor: e.target.value })}
                   />
@@ -338,7 +347,7 @@ export default function PlatformSettingsPage() {
                   />
                 </div>
               </Field>
-              <Field label="SMS Sender ID" hint="Used for outbound SMS alerts">
+              <Field label="SMS Sender ID" hint="Used for outbound USSD and SMS notifications">
                 <LocalTextInput
                   value={formData.smsSenderId}
                   onChange={(e) => setFormData({ ...formData, smsSenderId: e.target.value })}
@@ -364,18 +373,18 @@ export default function PlatformSettingsPage() {
           />
         </div>
 
-        {/* ── Right Column ── */}
-        <div className="space-y-6">
-          <div className="rounded-lg bg-gray-900 p-6 text-white shadow-sm dark:bg-[#121212] dark:border dark:border-white/10">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-brand-400">Impact Zone</h3>
-            <p className="mt-2 text-lg font-medium">Platform-Wide Rules</p>
-            <p className="mt-2 text-sm leading-relaxed text-gray-400">
-              Changes applied here immediately affect consumer behavior, point accrual, and redemption flows across all your branches and regions.
-            </p>
-            <div className="mt-6 pt-6 border-t border-white/10">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-400">Tenant Slug:</span>
-                <span className="font-mono text-brand-400">{tenantSlug}</span>
+        {/* Right Column (4 Columns) */}
+        <div className="col-span-12 xl:col-span-4 space-y-6">
+          <div className="bg-gradient-to-br from-gray-900 via-gray-950 to-black border border-gray-800 p-6 rounded-2xl text-white shadow-xl space-y-3 relative overflow-hidden">
+            <div className="relative z-10 space-y-3">
+              <span className="text-[10px] font-semibold text-brand-400 uppercase tracking-wider">Tenant Scope</span>
+              <h3 className="text-sm font-bold text-white">Platform-Wide Governance</h3>
+              <p className="text-xs text-gray-400 leading-relaxed">
+                Configurations updated on this screen take effect immediately across all regional branches, dealers, and USSD dispatch gateways.
+              </p>
+              <div className="pt-2 border-t border-gray-800 flex items-center justify-between text-xs font-mono">
+                <span className="text-gray-500">Tenant Slug</span>
+                <span className="text-brand-400 font-bold">{tenantSlug || "default"}</span>
               </div>
             </div>
           </div>

@@ -45,13 +45,8 @@ export default function SalesHierarchyDetail({ params }: PageProps) {
 
   if (isError) {
     return (
-      <div className="w-full">
-        <div className="flex items-center gap-3 rounded-md bg-error-50 p-4 border border-error-200 dark:bg-error-500/10 dark:border-error-500/20">
-          <svg className="h-5 w-5 shrink-0 text-error-600 dark:text-error-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-          </svg>
-          <p className="text-sm font-medium text-error-800 dark:text-error-300">Failed to load staff details. Please try again.</p>
-        </div>
+      <div className="w-full p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-semibold animate-fadeIn">
+        Failed to load staff details. Please refresh or try again.
       </div>
     );
   }
@@ -59,7 +54,7 @@ export default function SalesHierarchyDetail({ params }: PageProps) {
   if (isLoading || !staff) {
     return (
       <div className="flex min-h-[60vh] w-full items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-brand-500 dark:border-white/10 dark:border-t-brand-400"></div>
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-500 border-t-transparent"></div>
       </div>
     );
   }
@@ -68,10 +63,9 @@ export default function SalesHierarchyDetail({ params }: PageProps) {
     setIsSaving(true);
     setError("");
 
-    // Validation
     if (!editData.name) { setError("Name is required"); setIsSaving(false); return; }
     if (editData.email && !/^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(editData.email)) {
-      setError("Invalid email address"); setIsSaving(false); return;
+      setError("Invalid email address format"); setIsSaving(false); return;
     }
 
     try {
@@ -131,37 +125,47 @@ export default function SalesHierarchyDetail({ params }: PageProps) {
     }
   };
 
+  const formatRoleLabel = (role?: string) => {
+    if (!role) return "Staff";
+    return role.toLowerCase().replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+  };
+
+  function toggleStatus() {
+    mutate({ ...staff, status: staff.status === "inactive" ? "active" : "inactive" }, false);
+  }
+
   return (
-    <div className="w-full space-y-6 animate-in fade-in duration-500">
+    <div className="w-full space-y-6 animate-fadeIn pb-12">
 
       {/* ── Page Header ──────────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5 rounded-lg bg-white p-6 border border-gray-200 shadow-sm dark:bg-[#18181b] dark:border-white/10">
-        <div className="flex items-center gap-5">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-gray-200/80 dark:border-white/[0.06] pb-5">
+        <div className="flex items-center gap-4">
           <Link
             href="/settings/sales-hierarchy"
-            className="group flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white shadow-sm transition-all hover:bg-gray-50 dark:border-white/10 dark:bg-[#18181b] dark:hover:bg-white/5"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors text-gray-500 dark:text-gray-400"
           >
-            <svg className="h-4 w-4 text-gray-500 transition-transform group-hover:-translate-x-0.5 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
             </svg>
           </Link>
 
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-indigo-100 text-lg font-bold text-indigo-700 shadow-sm dark:bg-indigo-500/20 dark:text-indigo-400">
+          {/* Rounded Avatar Circle */}
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 font-bold text-sm border border-purple-500/20 shadow-2xs">
             {staff.name?.charAt(0) || "S"}
           </div>
 
           <div>
-            <div className="flex flex-wrap items-center gap-3">
-              <h1 className="text-xl font-semibold tracking-tight text-gray-900 dark:text-white">
+            <div className="flex items-center gap-3">
+              <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white">
                 {staff.name}
               </h1>
               <Badge color={getRoleBadgeColor(staff.role) as any} size="sm">
-                {staff.role?.replace(/_/g, " ")}
+                {formatRoleLabel(staff.role)}
               </Badge>
               {staff.status === "inactive" && <Badge color="error" size="sm">Inactive</Badge>}
             </div>
-            <p className="mt-1 text-sm font-medium text-gray-500 dark:text-gray-400">
-              {staff.email || "No email"} · {staff.phone || "No phone"}
+            <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+              {staff.email || "No email"} · {staff.phone || "No phone contact"}
             </p>
           </div>
         </div>
@@ -171,14 +175,14 @@ export default function SalesHierarchyDetail({ params }: PageProps) {
             <>
               <button
                 onClick={() => { setIsEditing(false); setEditData(staff); setError(""); }}
-                className="rounded-md bg-white px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 shadow-sm hover:bg-gray-50 dark:bg-white/5 dark:border-white/10 dark:text-gray-300 dark:hover:bg-white/10 transition-colors"
+                className="px-4 py-2.5 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 text-xs font-semibold rounded-xl transition"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSave}
                 disabled={isSaving}
-                className="inline-flex items-center justify-center rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 disabled:opacity-60 transition-colors"
+                className="px-5 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold rounded-xl shadow-md shadow-brand-500/20 transition disabled:opacity-50"
               >
                 {isSaving ? "Saving..." : "Save changes"}
               </button>
@@ -186,10 +190,10 @@ export default function SalesHierarchyDetail({ params }: PageProps) {
           ) : (
             <button
               onClick={() => setIsEditing(true)}
-              className="inline-flex items-center gap-2 rounded-md bg-white px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 shadow-sm hover:bg-gray-50 dark:bg-white/5 dark:border-white/10 dark:text-gray-300 dark:hover:bg-white/10 transition-colors"
+              className="px-4 py-2.5 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 text-xs font-semibold rounded-xl transition flex items-center gap-2 shadow-2xs"
             >
-              <svg className="h-4 w-4 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+              <svg className="h-4 w-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
               </svg>
               Edit staff
             </button>
@@ -198,24 +202,21 @@ export default function SalesHierarchyDetail({ params }: PageProps) {
       </div>
 
       {error && (
-        <div className="flex items-center gap-3 rounded-md bg-error-50 p-4 border border-error-200 dark:bg-error-500/10 dark:border-error-500/20">
-          <svg className="h-5 w-5 shrink-0 text-error-600 dark:text-error-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <p className="text-sm font-medium text-error-800 dark:text-error-300">{error}</p>
+        <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-semibold">
+          {error}
         </div>
       )}
 
       <div className="grid grid-cols-12 gap-6">
-        <div className="col-span-12 space-y-6 xl:col-span-8">
+        <div className="col-span-12 xl:col-span-8 space-y-6">
           {/* Staff Details */}
-          <div className="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#18181b] overflow-hidden">
-            <div className="border-b border-gray-100 px-6 py-5 dark:border-white/5">
-              <h3 className="text-base font-semibold text-gray-900 dark:text-white">Staff Information</h3>
+          <div className="bg-white dark:bg-white/[0.02] border border-gray-200/80 dark:border-white/[0.06] rounded-2xl overflow-hidden shadow-sm">
+            <div className="border-b border-gray-100 px-6 py-4 dark:border-white/5">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white">Staff Information</h3>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 p-6">
               <DetailItem label="Full name" value={staff.name} isEditing={isEditing} field="name" data={editData} setData={setEditData} />
-              <DetailItem label="Role" value={staff.role} isEditing={isEditing} field="role" data={editData} setData={setEditData} type="select" options={[
+              <DetailItem label="Role" value={formatRoleLabel(staff.role)} isEditing={isEditing} field="role" data={editData} setData={setEditData} type="select" options={[
                 { value: "CEO", label: "CEO" },
                 { value: "REGIONAL_MANAGER", label: "Regional Manager" },
                 { value: "ASM", label: "ASM" },
@@ -233,25 +234,25 @@ export default function SalesHierarchyDetail({ params }: PageProps) {
           </div>
 
           {/* Assigned Organizations */}
-          <div className="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#18181b] overflow-hidden">
-            <div className="border-b border-gray-100 px-6 py-5 dark:border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="bg-white dark:bg-white/[0.02] border border-gray-200/80 dark:border-white/[0.06] rounded-2xl overflow-hidden shadow-sm">
+            <div className="border-b border-gray-100 px-6 py-4 dark:border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <h3 className="text-base font-semibold text-gray-900 dark:text-white">Assigned Organizations</h3>
-                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Dealers and distributors managed by this staff member.</p>
+                <h3 className="text-sm font-bold text-gray-900 dark:text-white">Assigned Organizations</h3>
+                <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Dealers and distributors managed by this staff member.</p>
               </div>
               <button
                 onClick={() => setShowAddAssignment(!showAddAssignment)}
-                className="inline-flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-brand-700 transition-colors"
+                className="px-3.5 py-2 bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold rounded-xl shadow-sm transition flex items-center justify-center gap-1.5"
               >
                 Add assignment
               </button>
             </div>
 
             {showAddAssignment && (
-              <div className="border-b border-gray-100 px-6 py-4 dark:border-white/5 bg-gray-50/50 dark:bg-white/[0.02]">
+              <div className="border-b border-gray-100 px-6 py-4 dark:border-white/5 bg-gray-50/50 dark:bg-white/[0.01]">
                 <div className="flex flex-col sm:flex-row items-end gap-3">
                   <div className="w-full sm:w-[300px]">
-                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Organization</label>
+                    <label className="block text-[11px] font-semibold text-gray-500 dark:text-gray-400 mb-1">Organization</label>
                     <ModernSelect
                       options={organizations?.map((o: any) => ({ value: o.id, label: o.name })) || []}
                       value={selectedOrgId}
@@ -262,7 +263,7 @@ export default function SalesHierarchyDetail({ params }: PageProps) {
                   <button
                     onClick={handleAssignOrg}
                     disabled={!selectedOrgId || isAssigning}
-                    className="inline-flex h-10 items-center justify-center rounded-md bg-brand-600 px-4 text-sm font-medium text-white shadow-sm hover:bg-brand-700 disabled:opacity-60 transition-colors shrink-0"
+                    className="px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold rounded-xl shadow-sm transition disabled:opacity-50 shrink-0"
                   >
                     {isAssigning ? "Assigning..." : "Assign"}
                   </button>
@@ -272,32 +273,32 @@ export default function SalesHierarchyDetail({ params }: PageProps) {
 
             <div className="w-full overflow-x-auto">
               <Table className="w-full">
-                <TableHeader className="bg-gray-50/50 dark:bg-white/5">
-                  <TableRow className="border-b border-gray-100 dark:border-white/5">
-                    <TableCell isHeader className="py-3 px-6 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Organization</TableCell>
-                    <TableCell isHeader className="py-3 px-6 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Type</TableCell>
-                    <TableCell isHeader className="py-3 px-6 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Location</TableCell>
+                <TableHeader>
+                  <TableRow className="bg-gray-50/50 dark:bg-white/[0.01]">
+                    <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400">Organization</TableCell>
+                    <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400">Type</TableCell>
+                    <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400">Location</TableCell>
                   </TableRow>
                 </TableHeader>
-                <TableBody>
+                <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.04]">
                   {assignments && assignments.length > 0 ? (
                     assignments.map((a: any) => (
-                      <TableRow key={a.id} className="border-b border-gray-100 dark:border-white/5 hover:bg-gray-50 dark:hover:bg-white/[0.02] transition-colors">
-                        <TableCell className="py-4 px-6 text-sm font-medium text-gray-900 dark:text-white">
+                      <TableRow key={a.id} className="hover:bg-gray-50/50 dark:hover:bg-white/[0.02] transition-colors">
+                        <TableCell className="py-3.5 px-6 text-xs font-bold text-gray-900 dark:text-white">
                           {a.organization?.name}
                         </TableCell>
-                        <TableCell className="py-4 px-6 text-sm text-gray-500 dark:text-gray-400">
-                           <Badge size="sm" color="light">{a.organization?.type}</Badge>
+                        <TableCell className="py-3.5 px-6 text-xs text-gray-500">
+                          <Badge size="sm" color="light">{a.organization?.type}</Badge>
                         </TableCell>
-                        <TableCell className="py-4 px-6 text-sm text-gray-500 dark:text-gray-400">
+                        <TableCell className="py-3.5 px-6 text-xs text-gray-500 font-medium">
                           {a.organization?.town?.name}, {a.organization?.region?.name}
                         </TableCell>
                       </TableRow>
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={3} className="py-12 text-center text-sm text-gray-500 dark:text-gray-400">
-                        No organizations assigned.
+                      <TableCell colSpan={3} className="py-12 text-center text-xs font-semibold text-gray-400 italic">
+                        No organizations currently assigned.
                       </TableCell>
                     </TableRow>
                   )}
@@ -307,47 +308,28 @@ export default function SalesHierarchyDetail({ params }: PageProps) {
           </div>
         </div>
 
-        <div className="col-span-12 space-y-6 xl:col-span-4">
-          <div className="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#18181b] p-6">
-            <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-4">Performance Summary</h3>
+        <div className="col-span-12 xl:col-span-4 space-y-6">
+          <div className="bg-white dark:bg-white/[0.02] border border-gray-200/80 dark:border-white/[0.06] rounded-2xl p-6 shadow-sm">
+            <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-4">Performance Summary</h3>
             <div className="space-y-4">
-              <div className="p-4 rounded-xl bg-indigo-50 border border-indigo-100 dark:bg-indigo-500/10 dark:border-indigo-500/20">
-                <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 uppercase">Sales Target Achievement</span>
-                <p className="text-3xl font-bold text-indigo-900 dark:text-white mt-1">94.2%</p>
-                <div className="mt-3 h-2 w-full bg-indigo-200 rounded-full overflow-hidden dark:bg-indigo-900/40">
-                  <div className="h-full bg-indigo-600 rounded-full" style={{ width: '94.2%' }}></div>
+              <div className="p-4 rounded-xl bg-purple-500/10 border border-purple-500/20">
+                <span className="text-[10px] font-semibold text-purple-600 dark:text-purple-400 uppercase tracking-wider">Target Achievement</span>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">94.2%</p>
+                <div className="mt-3 h-2 w-full bg-purple-100 rounded-full overflow-hidden dark:bg-purple-900/40">
+                  <div className="h-full bg-purple-600 rounded-full" style={{ width: '94.2%' }}></div>
                 </div>
               </div>
-
-               <div className="grid grid-cols-2 gap-4">
-                  <div className="flex flex-col gap-1">
-                    <span className="text-xs text-gray-500">Retailers Met</span>
-                    <span className="text-lg font-bold text-gray-900 dark:text-white">28/30</span>
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <span className="text-xs text-gray-500">New Onboards</span>
-                    <span className="text-lg font-bold text-gray-900 dark:text-white">+5</span>
-                  </div>
-               </div>
             </div>
           </div>
 
-          <div className="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#18181b] p-6">
-            <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-4">Quick Actions</h3>
+          <div className="bg-white dark:bg-white/[0.02] border border-gray-200/80 dark:border-white/[0.06] rounded-2xl p-6 shadow-sm">
+            <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-4">Quick Actions</h3>
             <div className="space-y-2">
               <button
-                 onClick={() => setIsEditing(true)}
-                 className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-white/5 transition-colors text-sm text-gray-700 dark:text-gray-300"
+                onClick={toggleStatus}
+                className={`w-full flex items-center justify-between p-3 rounded-xl border border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors text-xs font-semibold ${staff.status === "inactive" ? "text-emerald-600" : "text-rose-600"}`}
               >
-                Promote / Change Role
-                <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
-              </button>
-              <button
-                 onClick={toggleStatus}
-                 className={`w-full flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-white/5 transition-colors text-sm ${staff.status === "inactive" ? "text-success-600" : "text-error-600"}`}
-              >
-                {staff.status === "inactive" ? "Re-activate Staff" : "Mark as Exited / Disable"}
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>
+                {staff.status === "inactive" ? "Re-activate staff member" : "Mark as inactive"}
               </button>
             </div>
           </div>
@@ -355,17 +337,12 @@ export default function SalesHierarchyDetail({ params }: PageProps) {
       </div>
     </div>
   );
-
-  function toggleStatus() {
-     // Mock toggle for UI demonstration
-     mutate({ ...staff, status: staff.status === "inactive" ? "active" : "inactive" }, false);
-  }
 }
 
 function DetailItem({ label, value, isEditing, field, data, setData, type = "text", options }: any) {
   return (
-    <div className="flex flex-col gap-1.5 py-3 border-b border-gray-50 last:border-0 dark:border-white/5">
-      <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+    <div className="flex flex-col gap-1 py-2.5 border-b border-gray-100/50 dark:border-white/5 last:border-0">
+      <span className="text-xs font-semibold text-gray-400">
         {label}
       </span>
       {isEditing ? (
@@ -382,12 +359,12 @@ function DetailItem({ label, value, isEditing, field, data, setData, type = "tex
               type={type}
               value={data[field] || ""}
               onChange={(e) => setData({ ...data, [field]: e.target.value })}
-              className="h-10 w-full rounded-md border border-gray-300 bg-white px-3 text-sm text-gray-900 shadow-sm transition-colors placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30"
+              className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50/50 px-3.5 text-xs font-medium text-gray-900 shadow-2xs transition-colors placeholder:text-gray-400 focus:border-brand-500/40 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/30 dark:border-white/10 dark:bg-white/[0.03] dark:text-white"
             />
           )}
         </div>
       ) : (
-        <span className={`text-sm mt-0.5 ${!value ? "text-gray-400 font-normal" : "text-gray-900 font-medium dark:text-gray-200"}`}>
+        <span className={`text-xs font-bold ${!value ? "text-gray-400 italic" : "text-gray-900 dark:text-white"}`}>
           {value || "Not provided"}
         </span>
       )}
