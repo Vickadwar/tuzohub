@@ -66,6 +66,7 @@ export async function proxy(request: NextRequest) {
     isAuthPage ||
     request.nextUrl.pathname.startsWith("/terms") ||
     request.nextUrl.pathname.startsWith("/privacy") ||
+    request.nextUrl.pathname.startsWith("/security") ||
     request.nextUrl.pathname.startsWith("/docs") ||
     request.nextUrl.pathname.startsWith("/documentation") ||
     request.nextUrl.pathname.startsWith("/r");
