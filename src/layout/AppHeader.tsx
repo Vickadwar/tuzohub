@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useRef, useCallback, useEffect } from "react";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ThemeToggleButton } from "@/components/common/ThemeToggleButton";
 import NotificationDropdown from "@/components/header/NotificationDropdown";
@@ -47,6 +48,7 @@ export default function AppHeader() {
     if (path.startsWith("/team")) return "Team Management";
     if (path.startsWith("/notifications")) return "Notifications Center";
     if (path.startsWith("/audit-logs")) return "Audit & Security Logs";
+    if (path.startsWith("/documentation")) return "User Guide & Docs";
     if (path.startsWith("/profile")) return "Account Profile";
     return "Dashboard";
   };
@@ -106,6 +108,15 @@ export default function AppHeader() {
 
       {/* Right Header Actions Dock */}
       <div className="ml-auto flex items-center gap-2">
+        <Link
+          href="/documentation"
+          title="User Guide & In-App Documentation"
+          className="flex h-8.5 w-8.5 items-center justify-center rounded-full border border-gray-200/60 dark:border-white/[0.08] bg-gray-100/60 dark:bg-white/[0.06] text-gray-600 dark:text-gray-300 hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-brand-500/20 dark:hover:text-brand-300 transition-all shadow-2xs shrink-0"
+        >
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M12 18h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </Link>
         <ThemeToggleButton />
         <NotificationDropdown />
         <div className="h-4 w-px bg-gray-200/80 dark:bg-white/10 mx-0.5 hidden sm:block" />

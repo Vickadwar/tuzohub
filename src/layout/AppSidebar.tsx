@@ -69,6 +69,12 @@ const superAdminNavItems: NavItem[] = [
     roles: ["SYSTEM_ADMIN"] 
   },
   { 
+    icon: <ListIcon />, 
+    name: "User guide & docs", 
+    path: "/documentation", 
+    roles: ["SYSTEM_ADMIN"] 
+  },
+  { 
     icon: <UserCircleIcon />, 
     name: "Account profile", 
     path: "/profile", 
@@ -154,6 +160,11 @@ const tenantNavItems: NavItem[] = [
     name: "Team management", 
     path: "/team", 
     roles: ["TENANT_ADMIN"] 
+  },
+  { 
+    icon: <ListIcon />, 
+    name: "User guide & docs", 
+    path: "/documentation" 
   },
   { 
     icon: <UserCircleIcon />, 
