@@ -1,10 +1,12 @@
+"use client";
+
 import React from "react";
 import Link from "next/link";
 import { Logo } from "@/components/common/Logo";
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-950 text-gray-900 dark:text-white font-satoshi selection:bg-brand-500 selection:text-white overflow-x-hidden transition-colors">
+    <div className="min-h-screen bg-white dark:bg-gray-950 text-gray-900 dark:text-white font-satoshi selection:bg-brand-500 selection:text-white overflow-x-hidden transition-colors scroll-smooth">
       
       {/* 1. Header (Sticky & Glassmorphic) */}
       <header className="fixed top-0 left-0 right-0 z-50 py-3.5 px-4 sm:px-8 backdrop-blur-md bg-white/90 dark:bg-gray-950/90 border-b border-gray-200/80 dark:border-white/[0.08] flex justify-between items-center transition-all">
@@ -15,6 +17,7 @@ export default function LandingPage() {
           <a href="#features" className="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">Platform</a>
           <a href="#security" className="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">Fraud prevention</a>
           <a href="#developers" className="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">Developers</a>
+          <Link href="/terms" className="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">Terms</Link>
         </nav>
 
         <div className="flex items-center gap-3">
@@ -62,13 +65,13 @@ export default function LandingPage() {
             Build your platform
           </Link>
           <Link
-            href="/docs"
+            href="/documentation"
             className="w-full sm:w-auto px-7 py-3.5 text-xs font-semibold rounded-full bg-white dark:bg-white/5 text-gray-700 dark:text-gray-200 border border-gray-200/80 dark:border-white/10 shadow-2xs hover:bg-gray-50 dark:hover:bg-white/10 transition flex items-center justify-center gap-2"
           >
             <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
             </svg>
-            Explore API docs
+            Explore User Guide
           </Link>
         </div>
 
@@ -83,7 +86,7 @@ export default function LandingPage() {
                   <div className="w-3 h-3 rounded-full bg-emerald-400/80" />
                 </div>
                 <div className="text-[11px] font-bold text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-white/5 px-3 py-1 rounded-full">
-                  TuZoHub Command Center
+                  TuzoHub Command Center
                 </div>
                 <div className="w-16" />
               </div>
@@ -173,8 +176,55 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* 4. Core Features */}
-      <section id="features" className="py-20 px-4 sm:px-8 bg-white dark:bg-gray-950">
+      {/* 4. Enterprise Solutions Section (#solutions) */}
+      <section id="solutions" className="py-20 px-4 sm:px-8 bg-gray-50/50 dark:bg-gray-900/30 scroll-mt-20">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center max-w-3xl mx-auto mb-16 space-y-3">
+            <span className="text-xs font-bold uppercase tracking-wider text-brand-600 dark:text-brand-400">Tailored Enterprise Solutions</span>
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 dark:text-white tracking-tight">
+              Multi-Tenant Architecture for Every Sales Layer
+            </h2>
+            <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+              Whether you are paying instant M-Pesa cashbacks to painters, accumulating trade points for cement dealers, or running consumer promo campaigns, TuzoHub isolates every tenant&apos;s data and credentials.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="bg-white dark:bg-gray-900 border border-gray-200/80 dark:border-white/10 rounded-2xl p-6 space-y-3 shadow-sm">
+              <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold">
+                💳
+              </div>
+              <h3 className="text-base font-bold text-gray-900 dark:text-white">Safaricom M-Pesa B2C Cashbacks</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                Connect your Safaricom B2C shortcodes to automatically dispatch cash rewards directly to contractors upon valid scratch-card scans.
+              </p>
+            </div>
+
+            <div className="bg-white dark:bg-gray-900 border border-gray-200/80 dark:border-white/10 rounded-2xl p-6 space-y-3 shadow-sm">
+              <div className="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center font-bold">
+                🏆
+              </div>
+              <h3 className="text-base font-bold text-gray-900 dark:text-white">Tiered Points Accumulation</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                Bank points across multiple purchases, configure expiration rules, and let distributors redeem points from a customized rewards catalog.
+              </p>
+            </div>
+
+            <div className="bg-white dark:bg-gray-900 border border-gray-200/80 dark:border-white/10 rounded-2xl p-6 space-y-3 shadow-sm">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
+                📱
+              </div>
+              <h3 className="text-base font-bold text-gray-900 dark:text-white">USSD (*483*55#) & SMS Channels</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                Reach non-smartphone users in rural distribution networks with automated USSD menus and instant SMS receipt confirmations.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 5. Core Platform Features (#features) */}
+      <section id="features" className="py-20 px-4 sm:px-8 bg-white dark:bg-gray-950 scroll-mt-20">
         <div className="max-w-7xl mx-auto">
           <div className="text-center max-w-3xl mx-auto mb-16 space-y-3">
             <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 dark:text-white tracking-tight">
@@ -224,8 +274,58 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* 5. Developer & API Section */}
-      <section id="developers" className="py-20 px-4 sm:px-8 bg-gray-900 text-white relative overflow-hidden">
+      {/* 6. Fraud Prevention & Security Section (#security) */}
+      <section id="security" className="py-20 px-4 sm:px-8 bg-gray-50 dark:bg-gray-900/50 border-t border-gray-200/80 dark:border-white/10 scroll-mt-20">
+        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+          <div className="space-y-4">
+            <span className="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">Anti-Fraud Engine</span>
+            <h2 className="text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight">Real-Time Velocity &amp; Fraud Prevention</h2>
+            <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+              Protect your brand against redemption abuse. TuzoHub continuously evaluates scan velocities, failed attempts, and geographic anomalies to flag suspicious activity before dispatches are authorized.
+            </p>
+            <div className="pt-2 flex flex-col gap-2.5 text-xs text-gray-700 dark:text-gray-300 font-medium">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                Max failed redemption thresholds per hour
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                Row-level database tenant isolation &amp; RSA payload encryption
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                Immutable audit logs compliant with Kenya Data Protection Act 2019
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-gray-950 p-6 shadow-xl space-y-4">
+            <div className="flex items-center justify-between border-b border-gray-100 dark:border-white/5 pb-3">
+              <span className="text-xs font-bold text-gray-900 dark:text-white">Live Fraud Telemetry</span>
+              <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 text-[10px] font-bold">Active Engine</span>
+            </div>
+            <div className="space-y-3 text-xs">
+              <div className="p-3 rounded-xl bg-gray-50 dark:bg-white/[0.02] flex items-center justify-between border border-gray-100 dark:border-white/5">
+                <div>
+                  <div className="font-semibold text-gray-900 dark:text-white">Velocity Check</div>
+                  <div className="text-[11px] text-gray-400">Max 5 redemptions / hour / MSISDN</div>
+                </div>
+                <span className="text-emerald-600 dark:text-emerald-400 font-bold">PASSED</span>
+              </div>
+              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-between">
+                <div>
+                  <div className="font-semibold text-amber-900 dark:text-amber-300">Duplicate PIN Attempt</div>
+                  <div className="text-[11px] text-amber-700 dark:text-amber-400">Flagged &amp; Blocked</div>
+                </div>
+                <span className="text-amber-600 font-bold">BLOCKED</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 7. Developer & API Section (#developers) */}
+      <section id="developers" className="py-20 px-4 sm:px-8 bg-gray-900 text-white relative overflow-hidden scroll-mt-20">
         <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
           <div className="space-y-4">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-500/20 border border-brand-500/30 text-brand-400 text-xs font-bold uppercase tracking-wider">
@@ -235,12 +335,14 @@ export default function LandingPage() {
             <p className="text-xs text-gray-400 leading-relaxed">
               Connect existing ERP, POS, or Mobile Money payout gateways using predictable RESTful endpoints and secure event signatures.
             </p>
-            <Link
-              href="/docs"
-              className="inline-flex items-center gap-2 text-xs font-bold text-brand-400 hover:text-brand-300"
-            >
-              Read full API documentation →
-            </Link>
+            <div className="flex items-center gap-4">
+              <Link
+                href="/documentation"
+                className="inline-flex items-center gap-2 text-xs font-bold text-brand-400 hover:text-brand-300"
+              >
+                Read User Guide &amp; Docs →
+              </Link>
+            </div>
           </div>
 
           <div className="bg-[#0c111d] rounded-2xl p-5 border border-gray-800 font-mono text-xs shadow-2xl">
@@ -252,22 +354,72 @@ export default function LandingPage() {
             <div className="text-sky-400 mb-2">POST <span className="text-white">/api/v1/loyalty/purchases</span></div>
             <div className="text-gray-400">{`{`}</div>
             <div className="text-gray-300 ml-4 space-y-1">
-              <div><span className="text-pink-400">"tenant_api_key"</span>: <span className="text-emerald-400">"sk_test_8f92..."</span>,</div>
-              <div><span className="text-pink-400">"consumer_id"</span>: <span className="text-emerald-400">"usr_98x12"</span>,</div>
-              <div><span className="text-pink-400">"total_amount"</span>: <span className="text-amber-400">1500.00</span>,</div>
-              <div><span className="text-pink-400">"idempotency_key"</span>: <span className="text-emerald-400">"tx_u82ha_001"</span></div>
+              <div><span className="text-pink-400">&quot;tenant_api_key&quot;</span>: <span className="text-emerald-400">&quot;sk_test_8f92...&quot;</span>,</div>
+              <div><span className="text-pink-400">&quot;consumer_id&quot;</span>: <span className="text-emerald-400">&quot;usr_98x12&quot;</span>,</div>
+              <div><span className="text-pink-400">&quot;total_amount&quot;</span>: <span className="text-amber-400">1500.00</span>,</div>
+              <div><span className="text-pink-400">&quot;idempotency_key&quot;</span>: <span className="text-emerald-400">&quot;tx_u82ha_001&quot;</span></div>
             </div>
             <div className="text-gray-400">{`}`}</div>
           </div>
         </div>
       </section>
 
-      {/* 6. Footer */}
-      <footer className="border-t border-gray-200/80 dark:border-white/10 bg-white dark:bg-gray-950 py-12 px-4 sm:px-8">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6 text-xs text-gray-500">
-          <Logo size="sm" href="/" />
-          
-          <p>© {new Date().getFullYear()} TuZoHub Inc. All rights reserved.</p>
+      {/* 8. Comprehensive Accessible Footer */}
+      <footer className="border-t border-gray-200/80 dark:border-white/10 bg-white dark:bg-gray-950 pt-14 pb-10 px-4 sm:px-8">
+        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-8 mb-12 text-xs">
+          {/* Col 1: Brand */}
+          <div className="space-y-3 md:col-span-1">
+            <Logo size="md" href="/" />
+            <p className="text-gray-500 dark:text-gray-400 leading-relaxed text-[11px]">
+              Multi-tenant B2B2C loyalty platform orchestrating product vouchers, points, and Safaricom M-Pesa cash disbursements.
+            </p>
+          </div>
+
+          {/* Col 2: Navigation Links */}
+          <div className="space-y-2.5">
+            <h4 className="font-bold text-gray-900 dark:text-white uppercase tracking-wider text-[11px]">Platform</h4>
+            <ul className="space-y-2 text-gray-600 dark:text-gray-400">
+              <li><a href="#solutions" className="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">Solutions</a></li>
+              <li><a href="#features" className="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">Platform Features</a></li>
+              <li><a href="#security" className="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">Fraud Prevention Engine</a></li>
+              <li><a href="#developers" className="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">Developers &amp; API</a></li>
+            </ul>
+          </div>
+
+          {/* Col 3: Resources & Docs */}
+          <div className="space-y-2.5">
+            <h4 className="font-bold text-gray-900 dark:text-white uppercase tracking-wider text-[11px]">Resources</h4>
+            <ul className="space-y-2 text-gray-600 dark:text-gray-400">
+              <li><Link href="/documentation" className="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">In-App User Guide</Link></li>
+              <li><Link href="/auth/login" className="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">Tenant Sign In</Link></li>
+              <li><Link href="/auth/register" className="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">Create Tenant Account</Link></li>
+            </ul>
+          </div>
+
+          {/* Col 4: Legal & Compliance */}
+          <div className="space-y-2.5">
+            <h4 className="font-bold text-gray-900 dark:text-white uppercase tracking-wider text-[11px]">Legal &amp; Compliance</h4>
+            <ul className="space-y-2 text-gray-600 dark:text-gray-400">
+              <li>
+                <Link href="/terms" className="font-semibold text-brand-600 dark:text-brand-400 hover:underline">
+                  📜 Terms of Service
+                </Link>
+              </li>
+              <li>
+                <Link href="/privacy" className="font-semibold text-brand-600 dark:text-brand-400 hover:underline">
+                  🔒 Privacy Policy
+                </Link>
+              </li>
+              <li className="text-[10px] text-gray-400">
+                Kenya Data Protection Act, 2019 Compliant
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        {/* Bottom Bar */}
+        <div className="max-w-7xl mx-auto pt-8 border-t border-gray-100 dark:border-white/5 flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-gray-500">
+          <p>© {new Date().getFullYear()} TuzoHub Inc. All rights reserved.</p>
           
           <div className="flex items-center gap-2 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-3 py-1 rounded-full border border-emerald-500/20 font-semibold text-[11px]">
             <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
