@@ -60,13 +60,23 @@ export async function proxy(request: NextRequest) {
   const isAuthPage = request.nextUrl.pathname.startsWith("/auth");
   const isRootPath = request.nextUrl.pathname === "/";
   
+  // Publicly accessible pages that do not require authentication
+  const isPublicPage = 
+    isRootPath ||
+    isAuthPage ||
+    request.nextUrl.pathname.startsWith("/terms") ||
+    request.nextUrl.pathname.startsWith("/privacy") ||
+    request.nextUrl.pathname.startsWith("/docs") ||
+    request.nextUrl.pathname.startsWith("/documentation") ||
+    request.nextUrl.pathname.startsWith("/r");
+  
   // 1. If logged in and on an auth page, redirect to overview
   if (user && isAuthPage) {
     return NextResponse.redirect(new URL("/overview", request.url));
   }
 
-  // 2. If NOT logged in and trying to access anything other than auth/root, redirect to login
-  if (!user && !isAuthPage && !isRootPath) {
+  // 2. If NOT logged in and trying to access a protected page, redirect to login
+  if (!user && !isPublicPage) {
     return NextResponse.redirect(new URL("/auth/login", request.url));
   }
 
