@@ -1,5 +1,6 @@
 import React from "react";
 import Link from "next/link";
+import { Logo } from "@/components/common/Logo";
 
 export default function LandingPage() {
   return (
@@ -7,17 +8,7 @@ export default function LandingPage() {
       
       {/* 1. Header (Sticky & Glassmorphic) */}
       <header className="fixed top-0 left-0 right-0 z-50 py-3.5 px-4 sm:px-8 backdrop-blur-md bg-white/90 dark:bg-gray-950/90 border-b border-gray-200/80 dark:border-white/[0.08] flex justify-between items-center transition-all">
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-500 text-white font-black text-xs shadow-md shadow-brand-500/30">
-            TZ
-          </div>
-          <span className="text-lg font-extrabold tracking-tight text-gray-900 dark:text-white">
-            TuZo<span className="text-brand-500">Hub</span>
-            <span className="text-[10px] font-bold text-brand-600 dark:text-brand-400 bg-brand-500/10 border border-brand-500/20 px-2 py-0.5 rounded-full ml-2 uppercase tracking-wide">
-              Enterprise
-            </span>
-          </span>
-        </div>
+        <Logo size="md" href="/" />
         
         <nav className="hidden md:flex items-center gap-8 text-xs font-semibold text-gray-600 dark:text-gray-300">
           <a href="#solutions" className="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">Solutions</a>
@@ -274,12 +265,7 @@ export default function LandingPage() {
       {/* 6. Footer */}
       <footer className="border-t border-gray-200/80 dark:border-white/10 bg-white dark:bg-gray-950 py-12 px-4 sm:px-8">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6 text-xs text-gray-500">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-500 text-white font-black text-[10px]">
-              TZ
-            </div>
-            <span className="font-bold text-gray-900 dark:text-white">TuZoHub Enterprise</span>
-          </div>
+          <Logo size="sm" href="/" />
           
           <p>© {new Date().getFullYear()} TuZoHub Inc. All rights reserved.</p>
           

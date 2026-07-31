@@ -80,4 +80,43 @@ app.post("/registrations/:id/activate", async (c) => {
   }
 });
 
+app.get("/tenant-admins", async (c) => {
+  try {
+    const data = await SystemService.getTenantAdmins();
+    return c.json({ success: true, data });
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+app.get("/tenants/:id", async (c) => {
+  const id = c.req.param("id");
+  try {
+    const data = await SystemService.getTenantDetails(id);
+    return c.json({ success: true, data });
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 404);
+  }
+});
+
+app.post("/tenants/:id/status", async (c) => {
+  const id = c.req.param("id");
+  const body = await c.req.json();
+  try {
+    const data = await SystemService.setTenantStatus(id, body.status);
+    return c.json({ success: true, data });
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 400);
+  }
+});
+
+app.get("/team", async (c) => {
+  try {
+    const data = await SystemService.getSystemTeam();
+    return c.json({ success: true, data });
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
 export default app;

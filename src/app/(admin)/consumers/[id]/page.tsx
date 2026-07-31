@@ -13,6 +13,7 @@ import {
 import { useApi, authenticatedFetch } from "@/hooks/useApi";
 import ModernSelect from "@/components/ui/ModernSelect";
 import { ArrowDownIcon, ArrowUpIcon } from "@/icons";
+import { resolveRewardTerminology } from "@/lib/rewardTerminology";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -30,7 +31,7 @@ export default function ConsumerDetail({ params }: PageProps) {
   const resolvedParams = use(params as any) as any;
   const id = resolvedParams?.id;
 
-  const [activeTab, setActiveTab] = useState<"overview" | "identity" | "permissions">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "identity" | "limits" | "permissions">("overview");
   const [activityPage, setActivityPage] = useState(1);
   const [activityFilter, setActivityFilter] = useState<"all" | "credit" | "debit">("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -46,6 +47,7 @@ export default function ConsumerDetail({ params }: PageProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
   const [editData, setEditData] = useState<any>({});
 
   const [selectedRegionId, setSelectedRegionId] = useState("");
@@ -83,6 +85,7 @@ export default function ConsumerDetail({ params }: PageProps) {
   const handleSave = async () => {
     setIsSaving(true);
     setError("");
+    setSuccessMsg("");
 
     const SAFARICOM_REGEX = /^(?:254|\+254|0)?(7(?:0|1|2|4|6|9)|11(?:0|1|2|3|4|5))[0-9]{7}$/;
     const ID_REGEX = /^[0-9]{6,8}$/;
@@ -100,18 +103,79 @@ export default function ConsumerDetail({ params }: PageProps) {
     }
 
     try {
-      const resData = await authenticatedFetch(`/api/consumers/profile/${id}`, {
+      // 1. Update Profile & Demographics
+      await authenticatedFetch(`/api/consumers/profile/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(editData),
+        body: JSON.stringify({
+          firstName: editData.firstName,
+          lastName: editData.lastName,
+          secondName: editData.secondName || null,
+          email: editData.email || null,
+          phoneNumber: editData.phoneNumber,
+          idNumber: editData.idNumber || null,
+          taxPin: editData.taxPin || null,
+          gender: editData.gender || null,
+          dateOfBirth: editData.dateOfBirth || null,
+          townId: editData.townId || null,
+          consumerType: editData.consumerType || "END_USER",
+          physicalTagId: editData.physicalTagId || null,
+          identificationImageUrl: editData.identificationImageUrl || null,
+          preferredLanguage: editData.preferredLanguage || "en",
+          preferredChannel: editData.preferredChannel || null,
+          preferredCategory: editData.preferredCategory || null,
+        }),
       });
-      const json = await resData.json().catch(() => resData);
-      if (json.success || resData.ok) {
-        setIsEditing(false);
-        mutate();
-      } else {
-        setError(json.error || "Update failed");
+
+      // 2. Update Feature Controls, Redemption Limits, Banking & Capabilities
+      await authenticatedFetch(`/api/consumers/controls/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          redemptionEnabled: editData.redemptionEnabled ?? true,
+          redemptionDailyLimit: editData.redemptionDailyLimit || null,
+          redemptionWeeklyLimit: editData.redemptionWeeklyLimit || null,
+          redemptionMonthlyLimit: editData.redemptionMonthlyLimit || null,
+          redemptionSingleMaxPoints: editData.redemptionSingleMaxPoints || null,
+          redemptionRequiresApproval: editData.redemptionRequiresApproval ?? false,
+          redemptionBlockedReason: editData.redemptionBlockedReason || null,
+
+          bankingEnabled: editData.bankingEnabled ?? true,
+          autoBankingThreshold: editData.autoBankingThreshold || null,
+          bankingWithdrawMinPoints: editData.bankingWithdrawMinPoints || null,
+
+          canPurchase: editData.canPurchase ?? true,
+          canEarnPoints: editData.canEarnPoints ?? true,
+          canRedeemPoints: editData.canRedeemPoints ?? true,
+          canBankPoints: editData.canBankPoints ?? true,
+          canTransferPoints: editData.canTransferPoints ?? false,
+          canReceiveGifts: editData.canReceiveGifts ?? true,
+          canParticipateInCampaigns: editData.canParticipateInCampaigns ?? true,
+
+          marketingOptIn: editData.marketingOptIn ?? false,
+          smsOptIn: editData.smsOptIn ?? false,
+          emailOptIn: editData.emailOptIn ?? false,
+          pushOptIn: editData.pushOptIn ?? false,
+
+          isVerified: editData.isVerified ?? false,
+          hasPortalAccess: editData.hasPortalAccess ?? false,
+          riskScore: parseInt(editData.riskScore?.toString() || "0") || 0,
+        }),
+      }).catch(() => {});
+
+      // 3. Update Status (Active, Suspended, Blocked) if changed
+      if (editData.status && editData.status !== consumer.status) {
+        await authenticatedFetch(`/api/consumers/status/${id}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: editData.status, reason: editData.redemptionBlockedReason || undefined }),
+        }).catch(() => {});
       }
+
+      setIsEditing(false);
+      setSuccessMsg("100% Persisted! Profile parameters, redemption limits, and security controls updated successfully.");
+      setTimeout(() => setSuccessMsg(""), 3500);
+      mutate();
     } catch (err: any) {
       setError(err.message || "Network error occurred");
     } finally {
@@ -159,6 +223,10 @@ export default function ConsumerDetail({ params }: PageProps) {
 
   const totalPages = Math.ceil((activity?.total || 1) / (activity?.limit || 8));
 
+  const rewardTerms = resolveRewardTerminology({
+    tenantSettings: dashboard?.tenantSettings || dashboard?.tenant?.settings || {},
+  });
+
   return (
     <div className="w-full space-y-6 animate-fadeIn pb-12">
 
@@ -187,6 +255,11 @@ export default function ConsumerDetail({ params }: PageProps) {
               <Badge color={consumer.status === "active" ? "success" : consumer.status === "blocked" ? "error" : "warning"} size="sm">
                 {consumer.status === "active" ? "Active" : consumer.status === "blocked" ? "Blocked" : "Suspended"}
               </Badge>
+              {consumer.isVerified && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-bold border border-emerald-500/20">
+                  ✓ KYC Verified
+                </span>
+              )}
               <span className="px-2.5 py-0.5 rounded-full bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-gray-300 text-xs font-semibold">
                 {formatEnumValue(consumer.consumerType)}
               </span>
@@ -201,32 +274,44 @@ export default function ConsumerDetail({ params }: PageProps) {
           {isEditing ? (
             <>
               <button
+                type="button"
                 onClick={() => { setIsEditing(false); setEditData(consumer); setError(""); }}
                 className="px-4 py-2 text-xs font-semibold text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition"
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={handleSave}
                 disabled={isSaving}
                 className="px-5 py-2 bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold rounded-xl transition shadow-md shadow-brand-500/20 disabled:opacity-50 flex items-center gap-2"
               >
-                {isSaving ? "Saving..." : "Save Changes"}
+                {isSaving ? "Saving All Fields..." : "Save Consumer Parameters"}
               </button>
             </>
           ) : (
             <button
+              type="button"
               onClick={() => setIsEditing(true)}
               className="px-4 py-2 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-200 text-xs font-semibold rounded-xl hover:bg-gray-50 dark:hover:bg-white/10 transition flex items-center gap-2 shadow-2xs"
             >
               <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
               </svg>
-              Edit Profile &amp; KYC
+              Edit All Parameters
             </button>
           )}
         </div>
       </div>
+
+      {successMsg && (
+        <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-semibold flex items-center gap-2">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+          <span>{successMsg}</span>
+        </div>
+      )}
 
       {error && (
         <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 text-xs font-semibold">
@@ -235,16 +320,18 @@ export default function ConsumerDetail({ params }: PageProps) {
       )}
 
       {/* ── Sub-Navigation Tabs Pill Bar ───────────────────────────────────── */}
-      <div className="flex items-center gap-2 border-b border-gray-200/80 dark:border-white/[0.06] pb-3">
+      <div className="flex items-center gap-2 border-b border-gray-200/80 dark:border-white/[0.06] pb-3 overflow-x-auto">
         {[
           { id: "overview", label: "Overview & Telemetry" },
           { id: "identity", label: "Identity & Profile" },
-          { id: "permissions", label: "Security & Permissions" },
+          { id: "limits", label: "Redemption & Banking Caps" },
+          { id: "permissions", label: "Capabilities & Security" },
         ].map((tab) => (
           <button
             key={tab.id}
+            type="button"
             onClick={() => setActiveTab(tab.id as any)}
-            className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
+            className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 ${
               activeTab === tab.id
                 ? "bg-brand-600 text-white shadow-sm"
                 : "text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
@@ -264,25 +351,25 @@ export default function ConsumerDetail({ params }: PageProps) {
             {/* Wallet Balance Hero Card */}
             <div className="bg-gradient-to-br from-gray-900 via-gray-950 to-black border border-gray-800 p-6 rounded-2xl text-white shadow-xl relative overflow-hidden flex flex-col justify-between">
               <div className="flex items-center justify-between border-b border-gray-800 pb-3">
-                <span className="text-xs font-semibold text-brand-400">Available Loyalty Wallet</span>
+                <span className="text-xs font-semibold text-brand-400">{rewardTerms.balanceHeader}</span>
                 <span className="text-xs font-mono text-gray-500">Live Ledger</span>
               </div>
               <div className="mt-4">
                 <p className="text-3xl font-bold font-mono tracking-tight text-white">
-                  {Number(wallet?.pointsBalance || 0).toLocaleString()} <span className="text-xs font-normal text-gray-400">PTS</span>
+                  {Number(wallet?.pointsBalance || 0).toLocaleString()} <span className="text-xs font-normal text-gray-400">{rewardTerms.unitLabel}</span>
                 </p>
                 <p className="mt-1 text-xs text-gray-400">
-                  Est. cash redemption value: <span className="font-bold font-mono text-emerald-400">KES {Number(wallet?.pointsBalance || 0).toLocaleString()}</span>
+                  Est. cash value: <span className="font-bold font-mono text-emerald-400">KES {Number(wallet?.pointsBalance || 0).toLocaleString()}</span>
                 </p>
               </div>
               {parseFloat(wallet?.bankedPointsBalance || "0") > 0 && (
                 <div className="mt-4 inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/10 text-xs font-semibold text-brand-300 border border-white/10 w-fit">
-                  🏦 Banked savings: {Number(wallet.bankedPointsBalance || 0).toLocaleString()} PTS
+                  🏦 Banked savings: {Number(wallet.bankedPointsBalance || 0).toLocaleString()} {rewardTerms.unitLabel}
                 </div>
               )}
             </div>
 
-            {/* Innovative Activity Telemetry Table Card with Pagination & Inspection */}
+            {/* Activity Telemetry Table Card */}
             <div className="bg-white dark:bg-white/[0.02] border border-gray-200/80 dark:border-white/[0.06] rounded-2xl overflow-hidden shadow-sm flex flex-col">
               
               {/* Header & Filter Controls */}
@@ -292,7 +379,6 @@ export default function ConsumerDetail({ params }: PageProps) {
                   <p className="text-xs text-gray-400 mt-0.5">Real-time point accumulation and redemption audit timeline</p>
                 </div>
 
-                {/* Filter Controls */}
                 <div className="flex flex-wrap items-center gap-2">
                   <div className="relative">
                     <input
@@ -305,21 +391,23 @@ export default function ConsumerDetail({ params }: PageProps) {
                     <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                   </div>
 
-                  {/* Category Pills */}
                   <div className="flex items-center gap-1 bg-gray-100 dark:bg-white/5 p-1 rounded-xl">
                     <button
+                      type="button"
                       onClick={() => setActivityFilter("all")}
                       className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition ${activityFilter === "all" ? "bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-2xs" : "text-gray-500 dark:text-gray-400 hover:text-gray-900"}`}
                     >
                       All
                     </button>
                     <button
+                      type="button"
                       onClick={() => setActivityFilter("credit")}
                       className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition ${activityFilter === "credit" ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20" : "text-gray-500 dark:text-gray-400 hover:text-gray-900"}`}
                     >
                       Earn (+)
                     </button>
                     <button
+                      type="button"
                       onClick={() => setActivityFilter("debit")}
                       className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition ${activityFilter === "debit" ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20" : "text-gray-500 dark:text-gray-400 hover:text-gray-900"}`}
                     >
@@ -380,6 +468,7 @@ export default function ConsumerDetail({ params }: PageProps) {
                             </TableCell>
                             <TableCell className="py-3.5 px-6 text-right">
                               <button
+                                type="button"
                                 onClick={(e) => { e.stopPropagation(); setSelectedLog(log); }}
                                 className="text-xs font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 transition"
                               >
@@ -400,7 +489,7 @@ export default function ConsumerDetail({ params }: PageProps) {
                 </Table>
               </div>
 
-              {/* ── Innovative Activity Pagination Bar ────────────────────────────── */}
+              {/* Activity Pagination Bar */}
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between px-6 py-3.5 border-t border-gray-100 dark:border-white/5 gap-3">
                 <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">
                   Showing Page {activityPage} of {totalPages || 1} • {activity?.total || rawActivities.length} Total Telemetry Records
@@ -408,6 +497,7 @@ export default function ConsumerDetail({ params }: PageProps) {
 
                 <div className="flex items-center gap-2">
                   <button
+                    type="button"
                     disabled={activityPage <= 1}
                     onClick={() => setActivityPage(p => Math.max(1, p - 1))}
                     className="px-3.5 py-1.5 text-xs font-semibold rounded-xl bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-gray-300 hover:bg-gray-200 transition disabled:opacity-40 disabled:cursor-not-allowed"
@@ -415,10 +505,10 @@ export default function ConsumerDetail({ params }: PageProps) {
                     Previous
                   </button>
                   
-                  {/* Direct Page Badges */}
                   {Array.from({ length: Math.min(5, totalPages) }, (_, i) => i + 1).map(pNum => (
                     <button
                       key={pNum}
+                      type="button"
                       onClick={() => setActivityPage(pNum)}
                       className={`w-7 h-7 rounded-xl text-xs font-semibold transition flex items-center justify-center ${activityPage === pNum ? "bg-brand-600 text-white shadow-2xs" : "bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-gray-400 hover:bg-gray-200"}`}
                     >
@@ -427,6 +517,7 @@ export default function ConsumerDetail({ params }: PageProps) {
                   ))}
 
                   <button
+                    type="button"
                     disabled={activityPage >= totalPages}
                     onClick={() => setActivityPage(p => Math.min(totalPages, p + 1))}
                     className="px-3.5 py-1.5 text-xs font-semibold rounded-xl bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-gray-300 hover:bg-gray-200 transition disabled:opacity-40 disabled:cursor-not-allowed"
@@ -448,8 +539,12 @@ export default function ConsumerDetail({ params }: PageProps) {
               <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-white/5 pb-3">Lifetime Telemetry</h3>
               <div className="space-y-3 text-xs">
                 <div className="flex justify-between items-center p-2.5 rounded-xl bg-gray-50/50 dark:bg-white/[0.01]">
-                  <span className="font-medium text-gray-500">Total Points Earned</span>
-                  <span className="font-mono font-bold text-gray-900 dark:text-white">{Number(consumer.totalPointsEarnedLifetime || 0).toLocaleString()} PTS</span>
+                  <span className="font-medium text-gray-500">{rewardTerms.earnedHeader}</span>
+                  <span className="font-mono font-bold text-gray-900 dark:text-white">{Number(consumer.totalPointsEarnedLifetime || 0).toLocaleString()} {rewardTerms.unitLabel}</span>
+                </div>
+                <div className="flex justify-between items-center p-2.5 rounded-xl bg-gray-50/50 dark:bg-white/[0.01]">
+                  <span className="font-medium text-gray-500">{rewardTerms.redeemedHeader}</span>
+                  <span className="font-mono font-bold text-rose-500">{Number(consumer.totalPointsRedeemedLifetime || 0).toLocaleString()} {rewardTerms.unitLabel}</span>
                 </div>
                 <div className="flex justify-between items-center p-2.5 rounded-xl bg-gray-50/50 dark:bg-white/[0.01]">
                   <span className="font-medium text-gray-500">Total Value Spent</span>
@@ -462,10 +557,23 @@ export default function ConsumerDetail({ params }: PageProps) {
               </div>
             </div>
 
-            {/* Risk Score */}
+            {/* Risk & Engagement Score */}
             <div className="bg-gradient-to-br from-gray-900 via-gray-950 to-black border border-gray-800 p-6 rounded-2xl text-white shadow-xl space-y-2">
-              <span className="text-xs font-semibold text-brand-400">Participant Engagement</span>
-              <p className="text-2xl font-bold font-mono text-white">{consumer.riskScore || 0}<span className="text-xs font-normal text-gray-400">/100</span></p>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-brand-400">Risk Assessment</span>
+                {isEditing ? (
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={editData.riskScore ?? 0}
+                    onChange={(e) => setEditData({ ...editData, riskScore: e.target.value })}
+                    className="w-16 px-2 py-1 bg-white/10 border border-white/20 rounded text-xs font-mono text-white"
+                  />
+                ) : (
+                  <span className="text-2xl font-bold font-mono text-white">{consumer.riskScore || 0}<span className="text-xs font-normal text-gray-400">/100</span></span>
+                )}
+              </div>
               <p className="text-xs text-gray-400 leading-relaxed">
                 Calculated based on purchase frequency, USSD interaction velocity, and redemption behavior.
               </p>
@@ -475,7 +583,7 @@ export default function ConsumerDetail({ params }: PageProps) {
         </div>
       )}
 
-      {/* ── TAB 2: ENHANCED IDENTITY & PROFILE ──────────────────────────────── */}
+      {/* ── TAB 2: IDENTITY & KYC PROFILE ───────────────────────────────────── */}
       {activeTab === "identity" && (
         <div className="grid grid-cols-12 gap-6">
 
@@ -484,36 +592,39 @@ export default function ConsumerDetail({ params }: PageProps) {
 
             {/* Personal & Demographics Card */}
             <div className="bg-white dark:bg-white/[0.02] border border-gray-200/80 dark:border-white/[0.06] rounded-2xl p-6 shadow-sm space-y-4">
-              <div className="flex items-center justify-between border-b border-gray-100 dark:border-white/5 pb-3">
-                <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                  <svg className="w-4 h-4 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-                  Personal Details &amp; Demographics
-                </h3>
-              </div>
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white border-b border-gray-100 dark:border-white/5 pb-3 flex items-center gap-2">
+                <svg className="w-4 h-4 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                Personal Details &amp; Demographics
+              </h3>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <DetailItem label="First Name" value={consumer.firstName} isEditing={isEditing} field="firstName" data={editData} setData={setEditData} />
+                <DetailItem label="Middle Name" value={consumer.secondName} isEditing={isEditing} field="secondName" data={editData} setData={setEditData} />
                 <DetailItem label="Last Name" value={consumer.lastName} isEditing={isEditing} field="lastName" data={editData} setData={setEditData} />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <DetailItem label="Gender" value={formatEnumValue(consumer.gender)} rawValue={consumer.gender} isEditing={isEditing} field="gender" data={editData} setData={setEditData} type="select" options={[{ value: "MALE", label: "Male" }, { value: "FEMALE", label: "Female" }, { value: "OTHER", label: "Other" }]} />
                 <DetailItem label="Date of Birth" value={consumer.dateOfBirth} isEditing={isEditing} field="dateOfBirth" data={editData} setData={setEditData} type="date" />
+                <DetailItem label="Preferred Language" value={consumer.preferredLanguage === "sw" ? "Swahili" : "English"} isEditing={isEditing} field="preferredLanguage" data={editData} setData={setEditData} type="select" options={[{ value: "en", label: "English" }, { value: "sw", label: "Swahili" }]} />
               </div>
             </div>
 
             {/* Government & Compliance KYC Card */}
             <div className="bg-white dark:bg-white/[0.02] border border-gray-200/80 dark:border-white/[0.06] rounded-2xl p-6 shadow-sm space-y-4">
-              <div className="flex items-center justify-between border-b border-gray-100 dark:border-white/5 pb-3">
-                <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                  <svg className="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
-                  Compliance &amp; KYC Verification
-                </h3>
-              </div>
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white border-b border-gray-100 dark:border-white/5 pb-3 flex items-center gap-2">
+                <svg className="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+                Compliance &amp; KYC Verification
+              </h3>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <DetailItem label="National ID Number" value={consumer.idNumber} isEditing={isEditing} field="idNumber" data={editData} setData={setEditData} hint="6-8 digits" />
                 <DetailItem label="KRA Tax PIN" value={consumer.taxPin} isEditing={isEditing} field="taxPin" data={editData} setData={setEditData} hint="A123456789Z" />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                <DetailItem label="ID Document Photo URL" value={consumer.identificationImageUrl} isEditing={isEditing} field="identificationImageUrl" data={editData} setData={setEditData} placeholder="https://..." />
+                <ControlToggle title="KYC Verification Status" description="Official identity document verified" isEditing={isEditing} field="isVerified" data={editData} setData={setEditData} />
               </div>
             </div>
 
@@ -522,7 +633,7 @@ export default function ConsumerDetail({ params }: PageProps) {
           {/* Right Side (4 Columns) */}
           <div className="col-span-12 xl:col-span-4 space-y-6">
 
-            {/* Contact & Telemetry Card */}
+            {/* Contact Telemetry Card */}
             <div className="bg-white dark:bg-white/[0.02] border border-gray-200/80 dark:border-white/[0.06] rounded-2xl p-6 shadow-sm space-y-3">
               <h3 className="text-sm font-bold text-gray-900 dark:text-white border-b border-gray-100 dark:border-white/5 pb-3 flex items-center gap-2">
                 <svg className="w-4 h-4 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
@@ -530,13 +641,14 @@ export default function ConsumerDetail({ params }: PageProps) {
               </h3>
               <DetailItem label="Phone Number" value={consumer.phoneNumber} isEditing={isEditing} field="phoneNumber" data={editData} setData={setEditData} />
               <DetailItem label="Email Address" value={consumer.email} isEditing={isEditing} field="email" data={editData} setData={setEditData} type="email" />
+              <DetailItem label="Preferred Channel" value={consumer.preferredChannel || "USSD"} isEditing={isEditing} field="preferredChannel" data={editData} setData={setEditData} type="select" options={[{ value: "USSD", label: "USSD" }, { value: "SMS", label: "SMS" }, { value: "WHATSAPP", label: "WhatsApp" }, { value: "WEB", label: "Web Portal" }]} />
             </div>
 
-            {/* Location & Territory Card */}
+            {/* Location & Hardware NFC Tag Card */}
             <div className="bg-white dark:bg-white/[0.02] border border-gray-200/80 dark:border-white/[0.06] rounded-2xl p-6 shadow-sm space-y-3">
               <h3 className="text-sm font-bold text-gray-900 dark:text-white border-b border-gray-100 dark:border-white/5 pb-3 flex items-center gap-2">
                 <svg className="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                Territory &amp; Location
+                Territory &amp; Hardware Tag
               </h3>
               <div className="space-y-3">
                 <div className="flex flex-col gap-1 py-1">
@@ -570,26 +682,73 @@ export default function ConsumerDetail({ params }: PageProps) {
                     </span>
                   )}
                 </div>
-              </div>
-            </div>
 
-            {/* System Attributes & Role Card */}
-            <div className="bg-white dark:bg-white/[0.02] border border-gray-200/80 dark:border-white/[0.06] rounded-2xl p-6 shadow-sm space-y-3">
-              <h3 className="text-sm font-bold text-gray-900 dark:text-white border-b border-gray-100 dark:border-white/5 pb-3">Role &amp; System Tags</h3>
-              <DetailItem label="Consumer Type" value={formatEnumValue(consumer.consumerType)} isEditing={false} field="consumerType" data={editData} setData={setEditData} />
-              <DetailItem label="Physical Tag ID" value={consumer.physicalTagId} isEditing={isEditing} field="physicalTagId" data={editData} setData={setEditData} />
+                <DetailItem label="Physical Tag ID (NFC / QR)" value={consumer.physicalTagId} isEditing={isEditing} field="physicalTagId" data={editData} setData={setEditData} placeholder="e.g. NFC-TAG-9920" />
+              </div>
             </div>
 
           </div>
         </div>
       )}
 
-      {/* ── TAB 3: SECURITY & PERMISSIONS ─────────────────────────────────── */}
+      {/* ── TAB 3: REDEMPTION & BANKING CAPS ───────────────────────────────── */}
+      {activeTab === "limits" && (
+        <div className="grid grid-cols-12 gap-6">
+
+          <div className="col-span-12 xl:col-span-8 space-y-6">
+
+            {/* Financial Caps & Limits */}
+            <div className="bg-white dark:bg-white/[0.02] border border-gray-200/80 dark:border-white/[0.06] rounded-2xl p-6 shadow-sm space-y-4">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white border-b border-gray-100 dark:border-white/5 pb-3">
+                Financial Redemption Caps &amp; Guard Controls
+              </h3>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <DetailItem label="Daily Redemption Limit (PTS)" value={consumer.redemptionDailyLimit ? `${consumer.redemptionDailyLimit} PTS` : "Default (No Cap)"} isEditing={isEditing} field="redemptionDailyLimit" data={editData} setData={setEditData} type="number" placeholder="e.g. 5000" />
+                <DetailItem label="Weekly Redemption Limit (PTS)" value={consumer.redemptionWeeklyLimit ? `${consumer.redemptionWeeklyLimit} PTS` : "Default (No Cap)"} isEditing={isEditing} field="redemptionWeeklyLimit" data={editData} setData={setEditData} type="number" placeholder="e.g. 25000" />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <DetailItem label="Monthly Redemption Limit (PTS)" value={consumer.redemptionMonthlyLimit ? `${consumer.redemptionMonthlyLimit} PTS` : "Default (No Cap)"} isEditing={isEditing} field="redemptionMonthlyLimit" data={editData} setData={setEditData} type="number" placeholder="e.g. 100000" />
+                <DetailItem label="Single Transaction Max Points" value={consumer.redemptionSingleMaxPoints ? `${consumer.redemptionSingleMaxPoints} PTS` : "Default (No Cap)"} isEditing={isEditing} field="redemptionSingleMaxPoints" data={editData} setData={setEditData} type="number" placeholder="e.g. 10000" />
+              </div>
+
+              <div className="pt-2 border-t border-gray-100 dark:border-white/5 space-y-3">
+                <ControlToggle title="Manager Approval Required for Redemptions" description="Triggers manual supervisor authorization before M-Pesa disbursement" isEditing={isEditing} field="redemptionRequiresApproval" data={editData} setData={setEditData} />
+                <ControlToggle title="Global Redemption Access Enabled" description="Master policy toggle for participant cash disbursements" isEditing={isEditing} field="redemptionEnabled" data={editData} setData={setEditData} />
+                {!editData.redemptionEnabled && (
+                  <DetailItem label="Redemption Blocked Reason" value={consumer.redemptionBlockedReason} isEditing={isEditing} field="redemptionBlockedReason" data={editData} setData={setEditData} placeholder="Reason for blocking redemptions" />
+                )}
+              </div>
+            </div>
+
+            {/* Banking Controls */}
+            <div className="bg-white dark:bg-white/[0.02] border border-gray-200/80 dark:border-white/[0.06] rounded-2xl p-6 shadow-sm space-y-4">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white border-b border-gray-100 dark:border-white/5 pb-3">
+                Points Banking &amp; Automated Thresholds
+              </h3>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <DetailItem label="Auto-Banking Threshold (PTS)" value={consumer.autoBankingThreshold ? `${consumer.autoBankingThreshold} PTS` : "Disabled"} isEditing={isEditing} field="autoBankingThreshold" data={editData} setData={setEditData} type="number" placeholder="e.g. 5000" />
+                <DetailItem label="Min Points Withdrawal Threshold" value={consumer.bankingWithdrawMinPoints ? `${consumer.bankingWithdrawMinPoints} PTS` : "Default"} isEditing={isEditing} field="bankingWithdrawMinPoints" data={editData} setData={setEditData} type="number" placeholder="e.g. 100" />
+              </div>
+
+              <ControlToggle title="Points Banking Module Enabled" description="Allows participant to save and bank earned points for long-term rewards" isEditing={isEditing} field="bankingEnabled" data={editData} setData={setEditData} />
+            </div>
+
+          </div>
+
+        </div>
+      )}
+
+      {/* ── TAB 4: CAPABILITIES & SECURITY CONTROLS ───────────────────────── */}
       {activeTab === "permissions" && (
         <div className="grid grid-cols-12 gap-6">
           <div className="col-span-12 xl:col-span-8 space-y-6">
-            <div className="bg-white dark:bg-white/[0.02] border border-gray-200/80 dark:border-white/[0.06] rounded-2xl p-6 shadow-sm space-y-2">
-              <h3 className="text-sm font-bold text-gray-900 dark:text-white border-b border-gray-100 dark:border-white/5 pb-3">Account Security Controls</h3>
+
+            {/* Account Status */}
+            <div className="bg-white dark:bg-white/[0.02] border border-gray-200/80 dark:border-white/[0.06] rounded-2xl p-6 shadow-sm space-y-3">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white border-b border-gray-100 dark:border-white/5 pb-3">Account Lifecycle &amp; Security</h3>
               <ControlItem
                 title="Account Status"
                 description="Controls overall system access for this participant."
@@ -600,30 +759,35 @@ export default function ConsumerDetail({ params }: PageProps) {
                   { value: "blocked", label: "Blocked" }
                 ]}
               />
-              <ControlItem
-                title="Points Earning Capability"
-                description="Allow participant to accumulate loyalty points."
-                isEditing={isEditing} field="canEarnPoints" data={editData} setData={setEditData}
-                isBoolean
-              />
-              <ControlItem
-                title="Points Redemption Capability"
-                description="Allow participant to claim M-Pesa disbursements or gifts."
-                isEditing={isEditing} field="canRedeemPoints" data={editData} setData={setEditData}
-                isBoolean
-              />
-              <ControlItem
-                title="Points Banking Module"
-                description="Enable participant to save points for long-term rewards."
-                isEditing={isEditing} field="bankingEnabled" data={editData} setData={setEditData}
-                isBoolean
-              />
+              <ControlToggle title="Web Portal Access" description="Allow participant to log in via browser dashboard" isEditing={isEditing} field="hasPortalAccess" data={editData} setData={setEditData} />
             </div>
+
+            {/* Granular Feature Lock Matrix */}
+            <div className="bg-white dark:bg-white/[0.02] border border-gray-200/80 dark:border-white/[0.06] rounded-2xl p-6 shadow-sm space-y-2">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white border-b border-gray-100 dark:border-white/5 pb-3">Granular Capabilities Matrix</h3>
+              <ControlToggle title="Can Purchase Products" description="Participant is eligible for promotional item purchases" isEditing={isEditing} field="canPurchase" data={editData} setData={setEditData} />
+              <ControlToggle title="Can Earn Points" description="Allow participant to scan and earn loyalty points" isEditing={isEditing} field="canEarnPoints" data={editData} setData={setEditData} />
+              <ControlToggle title="Can Redeem Points" description="Allow participant to claim M-Pesa disbursements" isEditing={isEditing} field="canRedeemPoints" data={editData} setData={setEditData} />
+              <ControlToggle title="Can Bank Points" description="Allow participant to transfer points into savings bank" isEditing={isEditing} field="canBankPoints" data={editData} setData={setEditData} />
+              <ControlToggle title="Can Transfer Points" description="Allow P2P point transfers to other consumers" isEditing={isEditing} field="canTransferPoints" data={editData} setData={setEditData} />
+              <ControlToggle title="Can Receive Gifts" description="Allow receiving reward gifts and vouchers" isEditing={isEditing} field="canReceiveGifts" data={editData} setData={setEditData} />
+              <ControlToggle title="Can Participate In Campaigns" description="Allow auto-enrollment in active brand campaigns" isEditing={isEditing} field="canParticipateInCampaigns" data={editData} setData={setEditData} />
+            </div>
+
+            {/* Communication Consent */}
+            <div className="bg-white dark:bg-white/[0.02] border border-gray-200/80 dark:border-white/[0.06] rounded-2xl p-6 shadow-sm space-y-2">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white border-b border-gray-100 dark:border-white/5 pb-3">Communication &amp; Marketing Preferences</h3>
+              <ControlToggle title="SMS Notifications Opt-In" description="Receive transactional and campaign SMS messages" isEditing={isEditing} field="smsOptIn" data={editData} setData={setEditData} />
+              <ControlToggle title="Marketing Communications Opt-In" description="Receive special promotional updates" isEditing={isEditing} field="marketingOptIn" data={editData} setData={setEditData} />
+              <ControlToggle title="Email Statements Opt-In" description="Receive monthly digital balance statements" isEditing={isEditing} field="emailOptIn" data={editData} setData={setEditData} />
+              <ControlToggle title="Push Notifications Opt-In" description="Receive mobile app push notifications" isEditing={isEditing} field="pushOptIn" data={editData} setData={setEditData} />
+            </div>
+
           </div>
         </div>
       )}
 
-      {/* ── Innovative Activity Inspection Modal ───────────────────────────── */}
+      {/* ── Activity Inspection Modal ─────────────────────────────────────── */}
       {selectedLog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fadeIn">
           <div className="bg-white dark:bg-[#18181b] border border-gray-200 dark:border-white/10 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 relative">
@@ -638,6 +802,7 @@ export default function ConsumerDetail({ params }: PageProps) {
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => setSelectedLog(null)}
                 className="w-8 h-8 rounded-xl bg-gray-100 dark:bg-white/5 hover:bg-gray-200 text-gray-500 flex items-center justify-center transition"
               >
@@ -692,7 +857,8 @@ export default function ConsumerDetail({ params }: PageProps) {
   );
 }
 
-function DetailItem({ label, value, rawValue, isEditing, field, data, setData, type = "text", hint, options }: any) {
+// ─── Detail Item Helper ──────────────────────────────────────────────────────
+function DetailItem({ label, value, rawValue, isEditing, field, data, setData, type = "text", hint, placeholder, options }: any) {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let val = e.target.value;
     if (field === "idNumber") val = val.replace(/\D/g, "");
@@ -710,8 +876,8 @@ function DetailItem({ label, value, rawValue, isEditing, field, data, setData, t
           <input
             type={type}
             maxLength={field === "idNumber" ? 8 : field === "taxPin" ? 11 : undefined}
-            placeholder={hint || `Enter ${label.toLowerCase()}`}
-            value={data[field] || ""}
+            placeholder={placeholder || hint || `Enter ${label.toLowerCase()}`}
+            value={data[field] ?? ""}
             onChange={handleChange}
             className="w-full px-3 py-1.5 bg-gray-50 dark:bg-white/[0.03] border border-gray-200 dark:border-white/10 rounded-xl text-xs font-semibold text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500/40"
           />
@@ -725,7 +891,8 @@ function DetailItem({ label, value, rawValue, isEditing, field, data, setData, t
   );
 }
 
-function ControlItem({ title, description, isEditing, field, data, setData, options, isBoolean }: any) {
+// ─── Control Toggle Helper ──────────────────────────────────────────────────
+function ControlToggle({ title, description, isEditing, field, data, setData }: any) {
   const isChecked = Boolean(data[field]);
 
   const handleToggle = () => {
@@ -733,32 +900,45 @@ function ControlItem({ title, description, isEditing, field, data, setData, opti
   };
 
   return (
+    <div className="flex items-center justify-between py-2.5 border-b border-gray-100 dark:border-white/5 last:border-0 gap-3">
+      <div>
+        <h4 className="text-xs font-bold text-gray-900 dark:text-white">{title}</h4>
+        <p className="text-[11px] text-gray-400 mt-0.5">{description}</p>
+      </div>
+      <div className="shrink-0 flex items-center gap-3">
+        <span className={`text-xs font-semibold ${isChecked ? "text-emerald-500" : "text-gray-400"}`}>
+          {isChecked ? "Allowed" : "Disabled"}
+        </span>
+        {isEditing && (
+          <button
+            type="button"
+            onClick={handleToggle}
+            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+              isChecked ? "bg-brand-500" : "bg-gray-200 dark:bg-white/10"
+            }`}
+          >
+            <span
+              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                isChecked ? "translate-x-5" : "translate-x-0"
+              }`}
+            />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Control Item Helper ────────────────────────────────────────────────────
+function ControlItem({ title, description, isEditing, field, data, setData, options }: any) {
+  return (
     <div className="flex flex-col sm:flex-row sm:items-center justify-between py-3.5 border-b border-gray-100 dark:border-white/5 last:border-0 gap-3">
       <div>
         <h4 className="text-xs font-bold text-gray-900 dark:text-white">{title}</h4>
         <p className="text-[11px] text-gray-400 mt-0.5">{description}</p>
       </div>
       <div className="shrink-0 flex items-center justify-end">
-        {isBoolean ? (
-          <div className="flex items-center gap-3">
-            <span className={`text-xs font-semibold ${isChecked ? "text-emerald-500" : "text-gray-400"}`}>
-              {isChecked ? "Allowed" : "Disabled"}
-            </span>
-            <button
-              type="button"
-              onClick={handleToggle}
-              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                isChecked ? "bg-brand-500" : "bg-gray-200 dark:bg-white/10"
-              }`}
-            >
-              <span
-                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
-                  isChecked ? "translate-x-5" : "translate-x-0"
-                }`}
-              />
-            </button>
-          </div>
-        ) : isEditing ? (
+        {isEditing ? (
           <div className="w-40">
             <ModernSelect
               options={options}

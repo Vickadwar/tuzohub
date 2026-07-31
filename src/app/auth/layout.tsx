@@ -2,6 +2,7 @@ import React from "react";
 import Link from "next/link";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { ThemeToggleButton } from "@/components/common/ThemeToggleButton";
+import { Logo } from "@/components/common/Logo";
 
 export default function AuthLayout({
   children,
@@ -14,14 +15,7 @@ export default function AuthLayout({
         {/* Left Form Area */}
         <div className="flex-1 flex flex-col justify-between p-6 sm:p-10 lg:p-12 z-10 min-h-screen lg:min-h-0">
           <div className="flex items-center justify-between w-full max-w-md mx-auto mb-6">
-            <Link href="/" className="flex items-center gap-2.5 group">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-500 text-white font-black text-xs shadow-md shadow-brand-500/30 group-hover:scale-105 transition-transform">
-                TZ
-              </div>
-              <span className="text-lg font-extrabold tracking-tight text-gray-900 dark:text-white">
-                TuZo<span className="text-brand-500">Hub</span>
-              </span>
-            </Link>
+            <Logo size="md" href="/" />
 
             <ThemeToggleButton />
           </div>

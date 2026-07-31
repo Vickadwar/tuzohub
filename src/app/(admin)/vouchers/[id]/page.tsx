@@ -10,10 +10,15 @@ interface PageProps {
 }
 
 const STATUS_CONFIG: Record<string, { color: string; label: string }> = {
-  PRINTED: { color: "light", label: "Printed" },
-  IN_TRANSIT: { color: "warning", label: "In Transit" },
-  ACTIVE: { color: "info", label: "Active" },
+  GENERATED: { color: "light", label: "Generated" },
+  PRINTED: { color: "warning", label: "Printed" },
+  AT_PRINTER: { color: "warning", label: "At Printer Press" },
+  IN_TRANSIT: { color: "purple", label: "In Transit" },
+  IN_STOCK: { color: "info", label: "In Stock" },
+  ACTIVE: { color: "success", label: "Active" },
   REDEEMED: { color: "success", label: "Redeemed" },
+  CANCELLED: { color: "error", label: "Cancelled" },
+  EXPIRED: { color: "error", label: "Expired" },
 };
 
 export default function VoucherDetail({ params }: PageProps) {
@@ -43,7 +48,7 @@ export default function VoucherDetail({ params }: PageProps) {
     );
   }
 
-  const statusConf = STATUS_CONFIG[voucher.status] || STATUS_CONFIG.PRINTED;
+  const statusConf = STATUS_CONFIG[voucher?.status] || { color: "light", label: voucher?.status || "Unknown" };
 
   // Timeline steps — computed from voucher data
   const steps = buildTimeline(voucher);
@@ -259,65 +264,67 @@ export default function VoucherDetail({ params }: PageProps) {
 // ─── Timeline Builder ────────────────────────────────────────────────────────
 
 function buildTimeline(v: any) {
-  const statusOrder = ["PRINTED", "IN_TRANSIT", "ACTIVE", "REDEEMED"];
-  const currentIdx = statusOrder.indexOf(v.status);
+  const statusOrder = ["GENERATED", "AT_PRINTER", "IN_TRANSIT", "IN_STOCK", "ACTIVE", "REDEEMED"];
+  const currentIdx = v.isActivated ? 4 : Math.max(0, statusOrder.indexOf(v.status));
 
   const steps = [
     {
-      title: "Voucher printed",
-      description: `Serial ${v.serialNumber} generated in batch ${v.batchNumber}`,
+      title: "1. Voucher token generated",
+      description: `Serial ${v.serialNumber} cataloged in batch ${v.batchNumber}`,
       timestamp: v.createdAt,
       completed: currentIdx >= 0,
       active: currentIdx === 0,
       extra: null,
     },
     {
-      title: "In transit / distribution",
-      description: "Voucher dispatched to dealer or warehouse for insertion into product tins.",
+      title: "2. At commercial printer press",
+      description: "Scratch-card printing & security coating at commercial press.",
       timestamp: null,
       completed: currentIdx >= 1,
       active: currentIdx === 1,
       extra: null,
     },
     {
-      title: "Batch activated",
-      description: v.isActivated
-        ? `Batch confirmed active — vouchers are ready for redemption.`
-        : "Pending batch activation by administrator.",
-      timestamp: v.activatedAt,
+      title: "3. Dispatched / In transit",
+      description: "Dispatched from printer press to factory warehouse inventory.",
+      timestamp: null,
       completed: currentIdx >= 2,
       active: currentIdx === 2,
+      extra: null,
+    },
+    {
+      title: "4. Received in factory stock",
+      description: "Confirmed in stock and ready for factory packaging run.",
+      timestamp: null,
+      completed: currentIdx >= 3,
+      active: currentIdx === 3,
+      extra: null,
+    },
+    {
+      title: "5. Activated in factory production run",
+      description: v.isActivated || v.status === "ACTIVE" || v.status === "REDEEMED"
+        ? `Batch & card confirmed active — vouchers are live for consumer redemption.`
+        : "Pending insertion into product tins & activation by production team.",
+      timestamp: v.activatedAt,
+      completed: currentIdx >= 4,
+      active: currentIdx === 4,
       extra: v.productName ? [
         { label: "Product", value: v.productName },
         { label: "SKU", value: v.productSku || "—" },
       ] : null,
     },
     {
-      title: "Redeemed",
+      title: "6. Redeemed by consumer",
       description: v.redeemedBy
         ? `Redeemed by ${v.consumerFirstName} ${v.consumerLastName} (${v.consumerPhone})`
-        : "Awaiting consumer redemption via USSD or admin terminal.",
+        : "Awaiting consumer redemption via USSD or web terminal.",
       timestamp: v.redeemedAt,
-      completed: currentIdx >= 3,
-      active: currentIdx === 3,
+      completed: currentIdx >= 5,
+      active: currentIdx === 5,
       extra: v.redeemedBy ? [
         { label: "Consumer", value: `${v.consumerFirstName} ${v.consumerLastName}` },
         { label: "Phone", value: v.consumerPhone || "—" },
         { label: "Loyalty #", value: v.consumerLoyaltyNumber || "—" },
-      ] : null,
-    },
-    {
-      title: "M-PESA payout",
-      description: v.status === "REDEEMED"
-        ? "Points loaded to consumer's mobile wallet. Payout dispatched via Safaricom Daraja B2C."
-        : "Automatic payout will be triggered upon successful redemption.",
-      timestamp: null,
-      completed: v.status === "REDEEMED",
-      active: false,
-      extra: v.status === "REDEEMED" ? [
-        { label: "Channel", value: "Safaricom B2C" },
-        { label: "Status", value: "Dispatched" },
-        { label: "Receipt / Ref", value: v.mpesaRef || "Simulated Daraja" },
       ] : null,
     },
   ];

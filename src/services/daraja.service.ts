@@ -58,7 +58,7 @@ export class DarajaService {
     // Dynamically encrypt security credential if plain password is supplied or credential is placeholder
     let securityCredential = config.securityCredential;
     if ((!securityCredential || securityCredential === "PLACEHOLDER") && config.initiatorPassword) {
-      securityCredential = generateSecurityCredential(config.initiatorPassword, config.certificatePem);
+      securityCredential = generateSecurityCredential(config.initiatorPassword, config.certificatePem, config.baseUrl);
     }
 
     const payload = {
@@ -109,7 +109,7 @@ export class DarajaService {
 
     let securityCredential = config.securityCredential;
     if ((!securityCredential || securityCredential === "PLACEHOLDER") && config.initiatorPassword) {
-      securityCredential = generateSecurityCredential(config.initiatorPassword, config.certificatePem);
+      securityCredential = generateSecurityCredential(config.initiatorPassword, config.certificatePem, config.baseUrl);
     }
 
     const payload = {

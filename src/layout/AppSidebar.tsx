@@ -8,6 +8,7 @@ import { useUser } from "../context/UserContext";
 import { signOut as serverSignOut } from "@/app/auth/actions";
 import { supabase } from "@/lib/supabase";
 import { clearAllCookies } from "@/lib/utils";
+import { Logo } from "@/components/common/Logo";
 import {
   BoxCubeIcon,
   ChevronDownIcon,
@@ -29,37 +30,70 @@ type NavItem = {
   roles?: string[];
 };
 
-const navItems: NavItem[] = [
-  // ── PLATFORM SECTION (Super Admins Only) ───────────────────────
-  {
-    icon: <PieChartIcon />,
-    name: "Platform",
-    roles: ["SYSTEM_ADMIN"],
-    subItems: [
-      { name: "Global dashboard", path: "/platform/dashboard" },
-      { name: "Manage tenants", path: "/platform/tenants" },
-      { name: "Pending registrations", path: "/admin/registrations" },
-      { name: "System billing", path: "/platform/billing" },
-    ],
+// ── SUPER ADMIN GOVERNANCE NAVIGATION ─────────────────────────────
+const superAdminNavItems: NavItem[] = [
+  { 
+    icon: <PieChartIcon />, 
+    name: "Global dashboard", 
+    path: "/platform/dashboard", 
+    roles: ["SYSTEM_ADMIN"] 
   },
-  
-  // ── TENANT OPERATIONS (Tenant Admins & Staff) ──────────────────
+  { 
+    icon: <GridIcon />, 
+    name: "Organizations & tenants", 
+    path: "/platform/tenants", 
+    roles: ["SYSTEM_ADMIN"] 
+  },
+  { 
+    icon: <ShootingStarIcon />, 
+    name: "Pending registrations", 
+    path: "/admin/registrations", 
+    roles: ["SYSTEM_ADMIN"] 
+  },
+  { 
+    icon: <DollarLineIcon />, 
+    name: "SaaS billing & invoices", 
+    path: "/platform/billing", 
+    roles: ["SYSTEM_ADMIN"] 
+  },
+  { 
+    icon: <GroupIcon />, 
+    name: "Super admin team", 
+    path: "/platform/team", 
+    roles: ["SYSTEM_ADMIN"] 
+  },
+  { 
+    icon: <ShootingStarIcon />, 
+    name: "Audit & security logs", 
+    path: "/audit-logs", 
+    roles: ["SYSTEM_ADMIN"] 
+  },
+  { 
+    icon: <UserCircleIcon />, 
+    name: "Account profile", 
+    path: "/profile", 
+    roles: ["SYSTEM_ADMIN"] 
+  },
+];
+
+// ── TENANT OPERATIONS NAVIGATION (Tenant Staff & Admins) ───────────
+const tenantNavItems: NavItem[] = [
   { 
     icon: <GridIcon />, 
     name: "Overview", 
     path: "/overview", 
-    roles: ["TENANT_ADMIN", "MANAGER", "OPERATOR", "VIEWER", "AGENT", "SYSTEM_ADMIN"] 
+    roles: ["TENANT_ADMIN", "MANAGER", "OPERATOR", "VIEWER", "AGENT"] 
   },
   { 
     icon: <GroupIcon />, 
     name: "Consumers", 
     path: "/consumers", 
-    roles: ["TENANT_ADMIN", "MANAGER", "OPERATOR", "SYSTEM_ADMIN"] 
+    roles: ["TENANT_ADMIN", "MANAGER", "OPERATOR"] 
   },
   {
     icon: <BoxCubeIcon />,
     name: "Campaigns & marketing",
-    roles: ["TENANT_ADMIN", "MANAGER", "SYSTEM_ADMIN"],
+    roles: ["TENANT_ADMIN", "MANAGER"],
     subItems: [
       { name: "Campaigns list", path: "/campaigns" },
       { name: "Promo SMS broadcast", path: "/campaigns/broadcast" },
@@ -69,14 +103,12 @@ const navItems: NavItem[] = [
     icon: <ShootingStarIcon />, 
     name: "Rewards catalog", 
     path: "/rewards", 
-    roles: ["TENANT_ADMIN", "MANAGER", "OPERATOR", "SYSTEM_ADMIN"] 
+    roles: ["TENANT_ADMIN", "MANAGER", "OPERATOR"] 
   },
-
-  // ── INVENTORY & LOGISTICS ──────────────────────────────────────
   {
     name: "Inventory",
     icon: <BoxIconLine />,
-    roles: ["TENANT_ADMIN", "MANAGER", "OPERATOR", "SYSTEM_ADMIN"],
+    roles: ["TENANT_ADMIN", "MANAGER", "OPERATOR"],
     subItems: [
       { name: "Product list", path: "/products" },
       { name: "Production batches", path: "/production" },
@@ -84,42 +116,50 @@ const navItems: NavItem[] = [
       { name: "Voucher inventory", path: "/vouchers/list" },
     ],
   },
-
-  // ── TOOLS & TRANSACTIONS ───────────────────────────────────────
   { 
     icon: <ListIcon />, 
     name: "Terminal", 
     path: "/terminal", 
-    roles: ["TENANT_ADMIN", "MANAGER", "OPERATOR", "AGENT", "SYSTEM_ADMIN"] 
+    roles: ["TENANT_ADMIN", "MANAGER", "OPERATOR", "AGENT"] 
   },
   { 
     icon: <DollarLineIcon />, 
     name: "Transactions", 
     path: "/transactions", 
-    roles: ["TENANT_ADMIN", "MANAGER", "VIEWER", "SYSTEM_ADMIN"] 
+    roles: ["TENANT_ADMIN", "MANAGER", "VIEWER"] 
   },
   { 
     icon: <ShootingStarIcon />, 
     name: "Redemptions & payouts", 
     path: "/redemptions", 
-    roles: ["TENANT_ADMIN", "MANAGER", "OPERATOR", "SYSTEM_ADMIN"] 
+    roles: ["TENANT_ADMIN", "MANAGER", "OPERATOR"] 
   },
-
-  // ── SETUP & TEAM ───────────────────────────────────────────────
   {
     icon: <GridIcon />,
     name: "Setup & masters",
-    roles: ["TENANT_ADMIN", "SYSTEM_ADMIN"],
+    roles: ["TENANT_ADMIN"],
     subItems: [
       { name: "Platform settings", path: "/settings" },
+      { name: "Roles & permissions", path: "/settings/roles-permissions" },
+      { name: "Audit & security logs", path: "/audit-logs" },
+      { name: "Notifications center", path: "/notifications" },
       { name: "Organizations", path: "/settings/organizations" },
       { name: "Regions", path: "/settings/regions" },
       { name: "Towns", path: "/settings/towns" },
       { name: "Sales hierarchy", path: "/settings/sales-hierarchy" },
     ],
   },
-  { icon: <GroupIcon />, name: "Team management", path: "/team", roles: ["TENANT_ADMIN", "SYSTEM_ADMIN"] },
-  { icon: <UserCircleIcon />, name: "Account profile", path: "/profile" },
+  { 
+    icon: <GroupIcon />, 
+    name: "Team management", 
+    path: "/team", 
+    roles: ["TENANT_ADMIN"] 
+  },
+  { 
+    icon: <UserCircleIcon />, 
+    name: "Account profile", 
+    path: "/profile" 
+  },
 ];
 
 export default function AppSidebar() {
@@ -129,7 +169,10 @@ export default function AppSidebar() {
   const router = useRouter();
   const isOpen = isExpanded || isHovered || isMobileOpen;
 
-  const filteredNavItems = navItems.filter(item => {
+  const isSuperAdmin = user?.role === "SYSTEM_ADMIN";
+  const activeNavItems = isSuperAdmin ? superAdminNavItems : tenantNavItems;
+
+  const filteredNavItems = activeNavItems.filter(item => {
     if (loading) return true;
     if (!item.roles) return true;
     return user?.role && item.roles.includes(user.role);
@@ -152,12 +195,12 @@ export default function AppSidebar() {
   };
 
   useEffect(() => {
-    navItems.forEach((nav) => {
+    activeNavItems.forEach((nav) => {
       if (nav.subItems?.some((sub) => isActive(sub.path))) {
         setOpenSubmenu(nav.name);
       }
     });
-  }, [pathname, isActive]);
+  }, [pathname, isActive, activeNavItems]);
 
   useEffect(() => {
     if (openSubmenu !== null && subMenuRefs.current[openSubmenu]) {
@@ -185,6 +228,7 @@ export default function AppSidebar() {
   };
 
   const userInitials = `${user?.firstName?.charAt(0) || ""}${user?.lastName?.charAt(0) || ""}`.toUpperCase() || "U";
+  const defaultHomePath = isSuperAdmin ? "/platform/dashboard" : "/overview";
 
   return (
     <aside
@@ -196,19 +240,14 @@ export default function AppSidebar() {
       onMouseLeave={() => setIsHovered(false)}
     >
       {/* Logo Section */}
-      <div className={`flex items-center h-[64px] px-4 border-b border-gray-100 dark:border-white/[0.06] shrink-0 ${isOpen ? "gap-3" : "justify-center"}`}>
-        <Link href="/overview" onClick={handleNavClick} className="flex items-center gap-3 group min-w-0">
-          <div className="w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center shrink-0 shadow-sm shadow-brand-500/30 group-hover:scale-105 transition-all">
-            <span className="text-white font-black text-xs tracking-tight">TZ</span>
-          </div>
-          {isOpen && (
-            <div className="flex flex-col min-w-0">
-              <span className="text-sm font-extrabold tracking-tight text-gray-900 dark:text-white leading-tight">
-                TuZo<span className="text-brand-500">Hub</span>
-              </span>
-              <span className="text-[10px] text-gray-400 font-medium tracking-wide leading-tight">Enterprise Loyalty</span>
-            </div>
-          )}
+      <div className={`flex items-center h-[56px] px-4 border-b border-gray-100 dark:border-white/[0.06] shrink-0 ${isOpen ? "" : "justify-center"}`}>
+        <Link href={defaultHomePath} onClick={handleNavClick} className="focus:outline-none">
+          <Logo
+            size="sm"
+            collapsed={!isOpen}
+            showSubtitle={isOpen}
+            subtitleText={isSuperAdmin ? "Super Admin Portal" : "Enterprise Loyalty Engine"}
+          />
         </Link>
       </div>
 
@@ -216,7 +255,7 @@ export default function AppSidebar() {
       <nav className="flex-1 overflow-y-auto py-4 custom-scrollbar">
         {isOpen && (
           <p className="px-4 pb-2 text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-white/20">
-            Main navigation
+            {isSuperAdmin ? "Platform Governance" : "Main Navigation"}
           </p>
         )}
         <ul className="flex flex-col gap-1 px-2.5">

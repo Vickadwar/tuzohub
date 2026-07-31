@@ -1,12 +1,39 @@
-import { Hono } from "hono";
+import { Context, Hono } from "hono";
 import { db } from "../../db";
-import { consumers, redemptionsQueue, tenantSettings } from "../../db/schema";
+import { consumers, redemptionsQueue, tenantSettings, users, tenants } from "../../db/schema";
 import { eq, and } from "drizzle-orm";
 import { SmsService } from "../../services/sms.service";
 import { DarajaService } from "../../services/daraja.service";
 import { PayoutGateway } from "../../services/payout.gateway";
+import { getAppBaseUrl } from "../../lib/domain";
+import { supabase } from "../../lib/supabase";
 
 const app = new Hono<{ Variables: { user: any } }>();
+
+async function resolveTenantId(c: Context) {
+  let tenantId = c.req.query("tenantId") || c.get("user")?.tenantId;
+  if (tenantId) return tenantId;
+
+  const authHeader = c.req.header("Authorization");
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    try {
+      const token = authHeader.split(" ")[1];
+      const { data: { user } } = await supabase.auth.getUser(token);
+      if (user) {
+        const dbUser = await db.query.users.findFirst({
+          where: eq(users.id, user.id)
+        });
+        if (dbUser?.tenantId) return dbUser.tenantId;
+      }
+    } catch (e) {
+      console.warn("[Mpesa resolveTenantId] Auth token check error:", e);
+    }
+  }
+
+  // Fallback to first available tenant in DB
+  const firstTenant = await db.query.tenants.findFirst();
+  return firstTenant?.id || null;
+}
 
 
 /**
@@ -198,17 +225,51 @@ app.post("/b2c/timeout", async (c) => {
 
   return c.json({ ResultCode: 0, ResultDesc: "Accepted" });
 });
+/**
+ * GET /api/mpesa/balance
+ * Returns the current live stored M-Pesa float balances and configured shortcode for the tenant.
+ */
+app.get("/balance", async (c) => {
+  const tenantId = await resolveTenantId(c);
+
+  if (!tenantId) {
+    return c.json({ success: false, error: "No active tenant found in system" }, 400);
+  }
+
+  try {
+    const tSettingsRecords = await db.select().from(tenantSettings).where(eq(tenantSettings.tenantId, tenantId)).limit(1);
+    const creds = (tSettingsRecords[0]?.credentials || {}) as any;
+
+    const isConfigured = Boolean(creds.darajaConsumerKey || creds.darajaShortCode);
+    const shortCode = creds.darajaShortCode || creds.shortCode || creds.b2cShortcode || null;
+
+    const storedBalance = creds?.floatBalance || {};
+
+    const responseData = {
+      shortCode: shortCode || "Not Configured",
+      utility: storedBalance.utility || (isConfigured ? "Pending Query" : "Unconfigured"),
+      working: storedBalance.working || (isConfigured ? "Pending Query" : "Unconfigured"),
+      charge: storedBalance.charge || (isConfigured ? "Pending Query" : "Unconfigured"),
+      lastCheckedAt: storedBalance.lastCheckedAt || null,
+      isConfigured,
+      environment: creds.darajaBaseUrl?.includes("sandbox") ? "Sandbox" : isConfigured ? "Production" : "Unconfigured"
+    };
+
+    return c.json({ success: true, data: responseData });
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
 
 /**
  * POST /api/mpesa/balance/query
  * Triggers an on-demand M-Pesa float balance check with Safaricom Daraja API.
  */
 app.post("/balance/query", async (c) => {
-  const user = c.get("user");
-  const tenantId = c.req.query("tenantId") || user?.tenantId;
+  const tenantId = await resolveTenantId(c);
 
   if (!tenantId) {
-    return c.json({ success: false, error: "Tenant ID is required" }, 400);
+    return c.json({ success: false, error: "No active tenant found in system" }, 400);
   }
 
   try {
@@ -227,8 +288,8 @@ app.post("/balance/query", async (c) => {
       initiatorPassword: "",
       securityCredential: creds.darajaSecurityCredential || "PLACEHOLDER",
       baseUrl: creds.darajaBaseUrl || "https://sandbox.safaricom.co.ke",
-      callbackUrl: `https://${process.env.APP_DOMAIN || "tuzohub.com"}/api/mpesa/balance/callback?tenantId=${tenantId}`,
-      queueTimeOutUrl: `https://${process.env.APP_DOMAIN || "tuzohub.com"}/api/mpesa/balance/timeout?tenantId=${tenantId}`,
+      callbackUrl: `${getAppBaseUrl()}/api/mpesa/balance/callback?tenantId=${tenantId}`,
+      queueTimeOutUrl: `${getAppBaseUrl()}/api/mpesa/balance/timeout?tenantId=${tenantId}`,
     };
 
     const result = await DarajaService.getAccountBalance({ config });
@@ -242,6 +303,56 @@ app.post("/balance/query", async (c) => {
   } catch (error: any) {
     console.error("[Mpesa Balance Query Error]", error);
     return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+/**
+ * POST /api/mpesa/test-connection
+ * Tests live connection to Safaricom Daraja OAuth generation endpoint for Sandbox or Live credentials.
+ */
+app.post("/test-connection", async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const { consumerKey, consumerSecret, baseUrl = "https://sandbox.safaricom.co.ke" } = body;
+
+  if (!consumerKey || !consumerSecret) {
+    return c.json({ success: false, error: "Both Consumer Key and Consumer Secret are required to test connection" }, 400);
+  }
+
+  // Simulation check
+  if (consumerKey.includes("PLACEHOLDER")) {
+    return c.json({
+      success: true,
+      simulated: true,
+      message: "Daraja Simulation Mode active (Placeholder credentials detected)"
+    });
+  }
+
+  try {
+    const auth = Buffer.from(`${consumerKey.trim()}:${consumerSecret.trim()}`).toString("base64");
+    const response = await fetch(`${baseUrl}/oauth/v1/generate?grant_type=client_credentials`, {
+      method: "GET",
+      headers: { Authorization: `Basic ${auth}` },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      return c.json({
+        success: false,
+        error: `Daraja Authentication Failed (${response.status}): ${errorText || "Invalid credentials or environment mismatch"}`
+      }, 400);
+    }
+
+    const data = await response.json();
+    return c.json({
+      success: true,
+      message: `Successfully authenticated with Safaricom Daraja (${baseUrl.includes("sandbox") ? "Sandbox" : "Live Production"})!`,
+      expiresInSeconds: data.expires_in,
+    });
+  } catch (error: any) {
+    return c.json({
+      success: false,
+      error: `Network / Connection Failed: ${error.message}`
+    }, 500);
   }
 });
 
@@ -318,12 +429,11 @@ app.post("/balance/timeout", async (c) => {
  * Directly triggers a manual M-Pesa B2C payout to any number or selected consumer.
  */
 app.post("/manual-payout", async (c) => {
-  const user = c.get("user");
   const body = await c.req.json().catch(() => ({}));
-  const tenantId = body.tenantId || user?.tenantId;
+  const tenantId = body.tenantId || await resolveTenantId(c);
 
   if (!tenantId) {
-    return c.json({ success: false, error: "Tenant ID is required" }, 400);
+    return c.json({ success: false, error: "No active tenant found in system" }, 400);
   }
 
   const { phoneNumber, consumerId, amount, remarks } = body;

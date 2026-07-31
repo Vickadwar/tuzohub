@@ -52,19 +52,17 @@ export default function CampaignDetail({ params }: PageProps) {
     setError("");
 
     try {
-      const resData = await authenticatedFetch(`/api/campaigns/${id}`, {
+      const json = await authenticatedFetch(`/api/campaigns/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(editData),
       });
 
-      const json = await resData.json().catch(() => resData);
-
-      if (json.success || resData.ok) {
+      if (json) {
         setIsEditing(false);
         mutate();
       } else {
-        setError(json.error || "Update failed");
+        setError("Update failed");
       }
     } catch (err: any) {
       setError(err.message || "Network error occurred");

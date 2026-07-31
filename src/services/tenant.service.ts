@@ -1,5 +1,5 @@
 import { db } from "../db";
-import { tenants, tenantSettings, countries, currencies } from "../db/schema";
+import { tenants, tenantSettings, countries, currencies, tenantChannels } from "../db/schema";
 import { eq } from "drizzle-orm";
 
 export class TenantService {
@@ -89,5 +89,19 @@ export class TenantService {
     }
 
     return { success: true };
+  }
+
+  static async getTenantChannels(tenantId: string, tx: any = db) {
+    const channels = await tx.select().from(tenantChannels).where(eq(tenantChannels.tenantId, tenantId));
+    if (channels && channels.length > 0) {
+      return channels;
+    }
+    // Return default active channel configurations if none custom configured
+    return [
+      { id: "def-ussd", type: "USSD", value: "*483*55#", description: "Official Bonga USSD Gateway (*483*55#)", isActive: true },
+      { id: "def-sms", type: "SMS", value: "22384", description: "Olive Tree Media SMS Shortcode (22384)", isActive: true },
+      { id: "def-web", type: "WEB_APP", value: "https://tuzohub.co.ke/p/scan", description: "Universal Web & PWA QR Portal", isActive: true },
+      { id: "def-pos", type: "POS_API", value: "https://tuzohub.co.ke/api/public/scan", description: "Enterprise POS & ERP Ingestion API", isActive: true },
+    ];
   }
 }

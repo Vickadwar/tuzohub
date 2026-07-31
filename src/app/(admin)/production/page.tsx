@@ -21,10 +21,12 @@ export default function ProductionBatches() {
   const { data: campaignRes } = useApi<any>("/campaigns");
   const campaigns = Array.isArray(campaignRes) ? campaignRes : (campaignRes?.data || []);
   
-  // Only pending voucher batches can be linked at production time
+  // Only IN_STOCK voucher batches (delivered to warehouse) can be loaded into production tins
   const { data: voucherBatchesRes, mutate: mutateVouchers } = useApi<any>("/vouchers/batches");
   const voucherBatchesArray = Array.isArray(voucherBatchesRes) ? voucherBatchesRes : (voucherBatchesRes?.data || []);
-  const pendingVoucherBatches: any[] = voucherBatchesArray.filter((b: any) => !b.isActivated && b.metadata?.status === "IN_TRANSIT");
+  const availableStockBatches: any[] = voucherBatchesArray.filter(
+    (b: any) => !b.isActivated && (b.status === "IN_STOCK" || b.metadata?.status === "IN_STOCK")
+  );
 
   const [showNewForm, setShowNewForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -58,20 +60,11 @@ export default function ProductionBatches() {
     if (!formData.batchNumber.trim()) return setError("Batch number is required.");
     const qtyProduced = parseInt(formData.quantityProduced);
     if (!qtyProduced || qtyProduced < 1) return setError("Enter a valid quantity.");
-    
-    // Validation: Total quantity of selected voucher batches must not exceed tins produced
-    if (formData.voucherBatchIds.length > 0) {
-      const selectedBatches = pendingVoucherBatches.filter(b => formData.voucherBatchIds.includes(b.id));
-      const totalVouchersInBatches = selectedBatches.reduce((sum, b) => sum + (b.quantity || 0), 0);
-      if (totalVouchersInBatches > qtyProduced) {
-        return setError(`Cannot activate ${totalVouchersInBatches} vouchers for only ${qtyProduced} tins produced.`);
-      }
-    }
 
     setIsSubmitting(true);
     try {
       // Record the production batch & auto activate links
-      await authenticatedFetch("/api/product-batches", {
+      const res = await authenticatedFetch("/api/product-batches", {
         method: "POST",
         body: JSON.stringify({
           productId: formData.productId,
@@ -83,6 +76,25 @@ export default function ProductionBatches() {
           voucherBatchIds: formData.voucherBatchIds
         }),
       });
+
+      // Dispatch in-app notification to Admin Bell
+      const activatedCount = res.data?.activatedVouchersCount || 0;
+      const notificationItem = {
+        id: `notif-${Date.now()}`,
+        title: `Production Run #${formData.batchNumber.toUpperCase()} Completed`,
+        message: `${qtyProduced} tins produced. ${activatedCount} scratch cards activated for market redemption.`,
+        href: `/production/${res.data?.id || ""}`,
+        time: "Just now",
+        unread: true,
+      };
+
+      try {
+        const existing = JSON.parse(localStorage.getItem("tuzohub_notifications") || "[]");
+        localStorage.setItem("tuzohub_notifications", JSON.stringify([notificationItem, ...existing]));
+        window.dispatchEvent(new Event("tuzohub_notification_updated"));
+      } catch (err) {
+        console.error("Failed to save notification:", err);
+      }
 
       if (formData.voucherBatchIds.length > 0) mutateVouchers();
 
@@ -193,12 +205,18 @@ export default function ProductionBatches() {
                 <ModernSelect
                   options={[
                     { value: "", label: "— Select a voucher batch —" },
-                    ...pendingVoucherBatches
+                    ...availableStockBatches
                       .filter((b: any) => !formData.voucherBatchIds.includes(b.id))
-                      .map((b: any) => ({
-                        value: b.id,
-                        label: `${b.batchNumber}  ·  ${b.quantity} cards  ·  AWAITING ACTIVATION`
-                      }))
+                      .map((b: any) => {
+                        const isValue = b.metadata?.batchType === "VALUE_BASED" || !b.productId;
+                        const labelDetail = isValue
+                          ? `Generic Pool (KES ${b.metadata?.rewardDenomination || "50"})`
+                          : (b.productName || "SKU Bound");
+                        return {
+                          value: b.id,
+                          label: `${b.batchNumber}  ·  ${b.quantity} cards  ·  ${labelDetail}`
+                        };
+                      })
                   ]}
                   value=""
                   onChange={(val) => {
@@ -206,14 +224,20 @@ export default function ProductionBatches() {
                       setFormData(f => ({ ...f, voucherBatchIds: [...f.voucherBatchIds, val] }));
                     }
                   }}
-                  placeholder="Select voucher batch"
+                  placeholder="Select IN_STOCK voucher batch"
                 />
+
+                {availableStockBatches.length === 0 && (
+                  <p className="text-[11px] text-amber-600 dark:text-amber-400 bg-amber-500/10 p-2.5 rounded-xl border border-amber-500/20">
+                    📦 No voucher batches are currently marked as &quot;IN_STOCK&quot; in warehouse inventory. Go to <Link href="/vouchers" className="underline font-bold">Voucher Batches</Link> to mark delivered cards as &quot;IN_STOCK&quot;.
+                  </p>
+                )}
 
                 {/* Selected Voucher Batches */}
                 {formData.voucherBatchIds.length > 0 && (
                   <div className="flex flex-wrap gap-2 pt-1">
                     {formData.voucherBatchIds.map(id => {
-                      const batch = pendingVoucherBatches.find(b => b.id === id);
+                      const batch = availableStockBatches.find((b: any) => b.id === id) || voucherBatchesArray.find((b: any) => b.id === id);
                       return (
                         <div key={id} className="flex items-center gap-1.5 bg-brand-500/10 border border-brand-500/20 px-3 py-1 rounded-full">
                           <span className="text-xs font-bold text-brand-600 dark:text-brand-400">{batch?.batchNumber || "Unknown Batch"}</span>

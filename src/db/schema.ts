@@ -614,9 +614,45 @@ export const tenantTiers = pgTable("tenant_tiers", {
   ],
 }));
 
-// ============================================================================
-// 7. PRODUCTS & BATCHES (Enhanced with inventory tracking)
-// ============================================================================
+export const productCategories = pgTable("product_categories", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
+  name: varchar("name", { length: 100 }).notNull(),
+  description: text("description"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => ({
+  nameTenantUnique: unique().on(t.name, t.tenantId),
+  policies: [
+    pgPolicy("tenant_isolation", {
+      for: "all",
+      to: "authenticated",
+      using: sql`tenant_id = (SELECT tenant_id FROM users WHERE id = auth.uid()) OR (SELECT role FROM users WHERE id = auth.uid()) = 'SYSTEM_ADMIN'`,
+      withCheck: sql`tenant_id = (SELECT tenant_id FROM users WHERE id = auth.uid()) OR (SELECT role FROM users WHERE id = auth.uid()) = 'SYSTEM_ADMIN'`,
+    }),
+    pgPolicy("admin_all", { for: "all", to: "service_role", using: sql`true`, withCheck: sql`true` }),
+  ],
+}));
+
+export const productUoms = pgTable("product_uoms", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
+  name: varchar("name", { length: 100 }).notNull(),
+  symbol: varchar("symbol", { length: 20 }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => ({
+  nameTenantUnique: unique().on(t.name, t.tenantId),
+  policies: [
+    pgPolicy("tenant_isolation", {
+      for: "all",
+      to: "authenticated",
+      using: sql`tenant_id = (SELECT tenant_id FROM users WHERE id = auth.uid()) OR (SELECT role FROM users WHERE id = auth.uid()) = 'SYSTEM_ADMIN'`,
+      withCheck: sql`tenant_id = (SELECT tenant_id FROM users WHERE id = auth.uid()) OR (SELECT role FROM users WHERE id = auth.uid()) = 'SYSTEM_ADMIN'`,
+    }),
+    pgPolicy("admin_all", { for: "all", to: "service_role", using: sql`true`, withCheck: sql`true` }),
+  ],
+}));
 
 export const products = pgTable("products", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -627,6 +663,8 @@ export const products = pgTable("products", {
   subcategory: varchar("subcategory", { length: 100 }),
   unitOfMeasure: varchar("unit_of_measure", { length: 20 }),
   measurementValue: numeric("measurement_value", { precision: 10, scale: 2 }),
+  barcode: varchar("barcode", { length: 100 }),
+  brand: varchar("brand", { length: 100 }),
   pointsPerUnit: integer("points_per_unit").notNull().default(0),
   price: numeric("price", { precision: 10, scale: 2 }),
   costPrice: numeric("cost_price", { precision: 10, scale: 2 }),
@@ -2138,7 +2176,15 @@ export const campaignsRelations = relations(campaigns, ({ one, many }) => ({
   versions: many(campaigns, { relationName: "campaign_hierarchy" }),
   rules: many(campaignRules),
   products: many(campaignProducts),
-  budget: one(campaignBudgets, { fields: [campaigns.id], references: [campaignBudgets.campaignId] }),
+  budget: one(campaignBudgets),
+}));
+
+export const campaignRulesRelations = relations(campaignRules, ({ one }) => ({
+  campaign: one(campaigns, { fields: [campaignRules.campaignId], references: [campaigns.id] }),
+}));
+
+export const campaignBudgetsRelations = relations(campaignBudgets, ({ one }) => ({
+  campaign: one(campaigns, { fields: [campaignBudgets.campaignId], references: [campaigns.id] }),
 }));
 
 export const campaignProductsRelations = relations(campaignProducts, ({ one }) => ({

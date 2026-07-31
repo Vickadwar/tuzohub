@@ -49,6 +49,22 @@ app.get("/currencies", async (c) => {
   }
 });
 
+// GET /api/tenants/channels — Tenant deployed channels
+app.get("/channels", async (c) => {
+  const user = c.get("user");
+  if (!user.tenantId) {
+    return c.json({ success: false, error: "No tenant associated with this user" }, 400);
+  }
+  try {
+    const data = await withScopedDb(user.userId, user.role || "authenticated", async (tx) => {
+      return await TenantService.getTenantChannels(user.tenantId, tx);
+    });
+    return c.json({ success: true, data });
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 400);
+  }
+});
+
 // GET /api/tenants/:slug
 app.get("/:slug", async (c) => {
   const user = c.get("user");

@@ -1,4 +1,5 @@
-import useSWR from "swr";
+import { useEffect } from "react";
+import useSWR, { SWRConfiguration } from "swr";
 import { supabase } from "@/lib/supabase";
 
 // Generic fetcher that works with our Hono API structure.
@@ -51,19 +52,28 @@ export const fetcher = async (url: string) => {
 };
 
 /**
- * Standardized hook for getting generic API resources.
+ * Standardized hook for getting generic API resources with optional auto-refresh.
  */
-export function useApi<T = any>(endpoint: string | null) {
+export function useApi<T = any>(endpoint: string | null, options?: SWRConfiguration) {
   const { data, error, mutate, isValidating } = useSWR<T>(
     endpoint ? `/api${endpoint}` : null,
     fetcher,
     {
-      revalidateOnFocus: false,
+      revalidateOnFocus: true,
       errorRetryCount: 2,
-      dedupingInterval: 10000,
+      dedupingInterval: 2000,
       keepPreviousData: true,
+      ...options,
     }
   );
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      mutate();
+    };
+    window.addEventListener("tuzohub_metrics_updated", handleUpdate);
+    return () => window.removeEventListener("tuzohub_metrics_updated", handleUpdate);
+  }, [mutate]);
 
   return {
     data,
@@ -99,5 +109,13 @@ export async function authenticatedFetch(url: string, options: RequestInit = {})
     throw error;
   }
 
-  return res.json();
+  const json = await res.json();
+  if (json.success !== undefined) {
+    if (!json.success) {
+      throw new Error(json.error || "API returned failure");
+    }
+    return json.data;
+  }
+
+  return json;
 }

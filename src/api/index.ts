@@ -24,6 +24,7 @@ import mpesaRoutes from "./routes/mpesa";
 import publicRoutes from "./routes/public";
 import systemRoutes from "./routes/system";
 import billingRoutes from "./routes/billing";
+import auditRoutes from "./routes/audit";
 
 type Variables = {
   user: {
@@ -93,6 +94,7 @@ app.route("/organizations", organizationsRoutes);
 app.route("/transactions", transactionsRoutes);
 app.route("/system", systemRoutes);
 app.route("/billing", billingRoutes);
+app.route("/audit-logs", auditRoutes);
 
 // Error Handling
 app.onError((err, c) => {

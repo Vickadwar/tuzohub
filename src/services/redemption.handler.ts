@@ -2,6 +2,7 @@ import { db } from "../db";
 import { redemptionsQueue } from "../db/schema";
 import { eq, and, sql, lt } from "drizzle-orm";
 import { PayoutProvider, WebhookPayoutProvider } from "./payout.gateway";
+import { AuditService } from "./audit.service";
 
 export class RedemptionHandler {
   private provider: PayoutProvider;
@@ -71,6 +72,18 @@ export class RedemptionHandler {
           })
           .where(eq(redemptionsQueue.id, id));
         
+        await AuditService.logEvent({
+          tenantId: item.tenantId,
+          action: "MPESA_B2C_PAYOUT_DISPATCHED",
+          entityType: "redemption_queue",
+          entityId: item.id,
+          newData: {
+            amount: item.amountValue,
+            destination: item.destinationAccount,
+            externalReference: response.externalReference,
+          },
+        });
+        
         console.log(`[RedemptionHandler] ✅ Redemption ${id} SUCCESS.`);
       } else {
         // 5. Update to FAILED (Retry later)
@@ -83,6 +96,19 @@ export class RedemptionHandler {
             updatedAt: new Date(),
           })
           .where(eq(redemptionsQueue.id, id));
+
+        await AuditService.logEvent({
+          tenantId: item.tenantId,
+          action: "VOUCHER_RETRY_BLOCKED",
+          entityType: "redemption_queue",
+          entityId: item.id,
+          oldData: { retryCount: item.retryCount },
+          newData: {
+            nextRetryCount: item.retryCount + 1,
+            lastError: response.error,
+            destination: item.destinationAccount,
+          },
+        });
         
         console.warn(`[RedemptionHandler] ⚠️ Redemption ${id} FAILED attempt ${item.retryCount + 1}: ${response.error}`);
       }
@@ -96,6 +122,17 @@ export class RedemptionHandler {
           updatedAt: new Date(),
         })
         .where(eq(redemptionsQueue.id, id));
+
+      await AuditService.logEvent({
+        tenantId: item.tenantId,
+        action: "VOUCHER_RETRY_BLOCKED",
+        entityType: "redemption_queue",
+        entityId: item.id,
+        newData: {
+          status: "CRITICAL_FAILED",
+          lastError: error.message,
+        },
+      });
       
       console.error(`[RedemptionHandler] ❌ Redemption ${id} CRITICAL FAILURE:`, error.message);
     }

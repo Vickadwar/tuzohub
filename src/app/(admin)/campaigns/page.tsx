@@ -57,15 +57,15 @@ export default function CampaignsList() {
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white">
-              Campaigns &amp; Rules Orchestration
+              Campaigns &amp; Rules Master Engine
             </h1>
             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-brand-500/10 text-brand-600 dark:text-brand-400 text-xs font-semibold border border-brand-500/20">
               <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse" />
-              Engine Active
+              Universal Engine Active
             </span>
           </div>
           <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            Design point multipliers, automated rewards, and targeted promotional engagement flows.
+            Multi-tenant orchestration for scratch codes, instant M-Pesa payouts, banked points, and velocity caps.
           </p>
         </div>
         <Link
@@ -124,8 +124,8 @@ export default function CampaignsList() {
             </svg>
           </div>
           <div>
-            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">Rules Engine</p>
-            <p className="text-sm font-bold text-gray-900 dark:text-white">Real-time Multipliers</p>
+            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">Circuit Breakers</p>
+            <p className="text-sm font-bold text-gray-900 dark:text-white">Active Budget Caps</p>
           </div>
         </div>
       </div>
@@ -143,7 +143,7 @@ export default function CampaignsList() {
             </span>
             <input
               type="text"
-              placeholder="Search by campaign name or category..."
+              placeholder="Search by campaign name or rules..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-9 pr-4 py-2 bg-gray-50 dark:bg-white/[0.03] border border-gray-200 dark:border-white/10 rounded-xl text-xs font-medium text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500/40"
@@ -151,7 +151,6 @@ export default function CampaignsList() {
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Status Filter Pills */}
             <div className="flex items-center bg-gray-100 dark:bg-white/[0.03] p-1 rounded-xl">
               {(["ALL", "ACTIVE", "PAUSED"] as const).map((st) => (
                 <button
@@ -184,82 +183,97 @@ export default function CampaignsList() {
             <Table className="w-full">
               <TableHeader>
                 <TableRow className="bg-gray-50/50 dark:bg-white/[0.01]">
-                  <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400">Campaign Name</TableCell>
-                  <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400">Promotion Type</TableCell>
-                  <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400">Validity Period</TableCell>
-                  <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400 text-right">Points Multiplier</TableCell>
+                  <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400">Campaign Blueprint &amp; Identity</TableCell>
+                  <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400">Fulfillment Model</TableCell>
+                  <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400">Reward Value</TableCell>
+                  <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400">Multiplier</TableCell>
                   <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400">Status</TableCell>
                   <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400 text-right">Actions</TableCell>
                 </TableRow>
               </TableHeader>
               <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.04]">
                 {filteredCampaigns.length > 0 ? (
-                  filteredCampaigns.map((campaign) => (
-                    <TableRow key={campaign.id} className="hover:bg-gray-50/50 dark:hover:bg-white/[0.02] transition-colors">
+                  filteredCampaigns.map((campaign) => {
+                    const ruleObj = campaign.rules?.[0]?.configuration || {};
+                    const isInstant = ruleObj.fulfillmentMode === "INSTANT_PAYOUT";
+                    const isMpesa = ruleObj.payoutRewardType === "MOBILE_MONEY";
+                    const isAirtime = ruleObj.payoutRewardType === "AIRTIME";
 
-                      <TableCell className="py-3.5 px-6">
-                        <div className="flex items-center gap-3">
-                          {/* Rounded Full Avatar Badge */}
-                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 font-bold text-xs border border-purple-500/20 shadow-2xs">
-                            {campaign.name?.charAt(0) || "C"}
+                    return (
+                      <TableRow key={campaign.id} className="hover:bg-gray-50/50 dark:hover:bg-white/[0.02] transition-colors">
+
+                        <TableCell className="py-3.5 px-6">
+                          <div className="flex items-center gap-3">
+                            <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-bold text-xs border shadow-2xs ${
+                              isInstant
+                                ? isAirtime
+                                  ? "bg-brand-500/10 text-brand-600 border-brand-500/20"
+                                  : "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
+                                : "bg-purple-500/10 text-purple-600 border-purple-500/20"
+                            }`}>
+                              {campaign.name?.charAt(0) || "C"}
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="text-xs font-bold text-gray-900 dark:text-white">
+                                {campaign.name}
+                              </span>
+                              <span className="text-[11px] text-gray-400 line-clamp-1 max-w-[240px]">
+                                {campaign.description || "No description provided"}
+                              </span>
+                            </div>
                           </div>
-                          <div className="flex flex-col">
-                            <span className="text-xs font-bold text-gray-900 dark:text-white">
-                              {campaign.name}
-                            </span>
-                            <span className="text-[11px] text-gray-400 line-clamp-1 max-w-[240px]">
-                              {campaign.description || "No description provided"}
-                            </span>
-                          </div>
-                        </div>
-                      </TableCell>
+                        </TableCell>
 
-                      <TableCell className="py-3.5 px-6">
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-white/5 text-xs font-semibold text-gray-700 dark:text-gray-300 capitalize">
-                          {campaign.campaignType?.replace(/_/g, " ").toLowerCase() || "Standard"}
-                        </span>
-                      </TableCell>
-
-                      <TableCell className="py-3.5 px-6">
-                        <div className="flex flex-col">
-                          <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-                            {new Date(campaign.startDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                        <TableCell className="py-3.5 px-6">
+                          <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-bold font-mono uppercase border ${
+                            isInstant
+                              ? isAirtime
+                                ? "bg-brand-500/10 text-brand-600 border-brand-500/20"
+                                : "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
+                              : "bg-purple-500/10 text-purple-600 border-purple-500/20"
+                          }`}>
+                            {isInstant ? (isAirtime ? "⚡ INSTANT AIRTIME" : "⚡ INSTANT M-PESA CASH") : "🪙 BANKED POINTS"}
                           </span>
-                          <span className="text-[10px] text-gray-400">
-                            to {campaign.endDate ? new Date(campaign.endDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : "Ongoing"}
+                        </TableCell>
+
+                        <TableCell className="py-3.5 px-6">
+                          <span className="text-xs font-mono font-bold text-gray-900 dark:text-white">
+                            {isInstant
+                              ? `KES ${ruleObj.instantCashAmount || 100} Cash`
+                              : `${ruleObj.pointsPerScan || 50} Pts/Scan`}
                           </span>
-                        </div>
-                      </TableCell>
+                        </TableCell>
 
-                      <TableCell className="py-3.5 px-6 text-right">
-                        <span className="px-2.5 py-1 rounded-lg bg-brand-500/10 text-brand-600 dark:text-brand-400 font-mono text-xs font-bold">
-                          {campaign.pointsMultiplier}x
-                        </span>
-                      </TableCell>
+                        <TableCell className="py-3.5 px-6">
+                          <span className="px-2.5 py-1 rounded-lg bg-brand-500/10 text-brand-600 dark:text-brand-400 font-mono text-xs font-bold">
+                            {campaign.pointsMultiplier}x
+                          </span>
+                        </TableCell>
 
-                      <TableCell className="py-3.5 px-6">
-                        <Badge
-                          size="sm"
-                          color={campaign.isActive ? "success" : "warning"}
-                        >
-                          {campaign.isActive ? "Active" : "Paused"}
-                        </Badge>
-                      </TableCell>
+                        <TableCell className="py-3.5 px-6">
+                          <Badge
+                            size="sm"
+                            color={campaign.isActive ? "success" : "warning"}
+                          >
+                            {campaign.isActive ? "Active" : "Paused"}
+                          </Badge>
+                        </TableCell>
 
-                      <TableCell className="py-3.5 px-6 text-right">
-                        <Link
-                          href={`/campaigns/${campaign.id}`}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand-500/10 text-brand-600 dark:text-brand-400 text-xs font-semibold rounded-lg hover:bg-brand-500/20 transition-all"
-                        >
-                          Configure
-                          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                          </svg>
-                        </Link>
-                      </TableCell>
+                        <TableCell className="py-3.5 px-6 text-right">
+                          <Link
+                            href={`/campaigns/${campaign.id}`}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand-500/10 text-brand-600 dark:text-brand-400 text-xs font-semibold rounded-lg hover:bg-brand-500/20 transition-all"
+                          >
+                            Configure
+                            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                            </svg>
+                          </Link>
+                        </TableCell>
 
-                    </TableRow>
-                  ))
+                      </TableRow>
+                    );
+                  })
                 ) : (
                   <TableRow>
                     <TableCell colSpan={6} className="py-20 text-center">

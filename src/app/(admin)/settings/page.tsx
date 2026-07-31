@@ -49,6 +49,10 @@ export default function PlatformSettingsPage() {
     baseCurrency: "",
     defaultPointValue: "1.00",
     pointExpiryMonths: "12",
+
+    // Promotional & Reward Model
+    defaultRewardMode: "POINTS",
+    rewardUnitLabel: "PTS",
     
     // Consumer Controls
     defaultCanPurchase: true,
@@ -98,6 +102,9 @@ export default function PlatformSettingsPage() {
             baseCurrency: t.baseCurrency || "",
             defaultPointValue: t.defaultPointValue || "1.00",
             pointExpiryMonths: String(t.pointExpiryMonths || 12),
+
+            defaultRewardMode: s.defaultRewardMode || "POINTS",
+            rewardUnitLabel: s.rewardUnitLabel || "PTS",
             
             defaultCanPurchase: s.defaultCanPurchase ?? true,
             defaultCanEarnPoints: s.defaultCanEarnPoints ?? true,
@@ -146,6 +153,9 @@ export default function PlatformSettingsPage() {
           baseCurrency: formData.baseCurrency,
           defaultPointValue: formData.defaultPointValue,
           pointExpiryMonths: parseInt(formData.pointExpiryMonths),
+
+          defaultRewardMode: formData.defaultRewardMode,
+          rewardUnitLabel: formData.rewardUnitLabel,
           
           defaultCanPurchase: formData.defaultCanPurchase,
           defaultCanEarnPoints: formData.defaultCanEarnPoints,
@@ -279,6 +289,32 @@ export default function PlatformSettingsPage() {
                   type="number"
                   value={formData.pointExpiryMonths}
                   onChange={(e) => setFormData({ ...formData, pointExpiryMonths: e.target.value })}
+                />
+              </Field>
+            </div>
+          </LocalFormSection>
+
+          {/* ── Promotional & Reward Model Defaults ── */}
+          <LocalFormSection title="Promotional & Reward Model Defaults" description="Specify whether this organization runs Points Accumulation, Instant M-Pesa Cashback, or Airtime">
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+              <Field label="Default Tenant Reward Model" hint="Campaigns inherit this unless overridden per campaign">
+                <ModernSelect
+                  options={[
+                    { value: "POINTS", label: "Points Accumulation (Traditional Loyalty)" },
+                    { value: "INSTANT_CASHBACK", label: "Instant Gratification (M-Pesa Cashback Payouts)" },
+                    { value: "INSTANT_AIRTIME", label: "Instant Airtime Recharge" },
+                    { value: "HYBRID", label: "Hybrid (Points + Instant Cashback)" },
+                  ]}
+                  value={formData.defaultRewardMode}
+                  onChange={(val) => setFormData({ ...formData, defaultRewardMode: val })}
+                  placeholder="Select default reward mode"
+                />
+              </Field>
+              <Field label="Reward Unit Symbol / Label" hint="e.g. PTS, KES, Airtime, Tokens">
+                <LocalTextInput
+                  value={formData.rewardUnitLabel}
+                  onChange={(e) => setFormData({ ...formData, rewardUnitLabel: e.target.value })}
+                  placeholder="e.g. PTS or KES"
                 />
               </Field>
             </div>

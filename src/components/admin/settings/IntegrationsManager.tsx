@@ -146,6 +146,34 @@ export default function IntegrationsManager({
   tenantSlug,
 }: IntegrationsManagerProps) {
   const [activeTab, setActiveTab] = useState<"sms" | "ussd" | "payout" | "webhooks">("sms");
+  const [testingDaraja, setTestingDaraja] = useState(false);
+  const [darajaTestResult, setDarajaTestResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  const handleTestDaraja = async () => {
+    setTestingDaraja(true);
+    setDarajaTestResult(null);
+    try {
+      const res = await fetch("/api/mpesa/test-connection", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          consumerKey: credentials.darajaConsumerKey,
+          consumerSecret: credentials.darajaConsumerSecret,
+          baseUrl: credentials.darajaBaseUrl || "https://sandbox.safaricom.co.ke",
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setDarajaTestResult({ success: true, message: data.message || "Connection successful!" });
+      } else {
+        setDarajaTestResult({ success: false, message: data.error || "Connection failed" });
+      }
+    } catch (err: any) {
+      setDarajaTestResult({ success: false, message: err.message || "Network error" });
+    } finally {
+      setTestingDaraja(false);
+    }
+  };
 
   const updateField = (key: string, val: any) => {
     onChange({
@@ -430,6 +458,43 @@ export default function IntegrationsManager({
                       rows={2}
                     />
                   </Field>
+
+                  {/* ── Test Credentials Action ── */}
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-3 border-t border-gray-200/60 dark:border-white/10">
+                    <div>
+                      <button
+                        type="button"
+                        onClick={handleTestDaraja}
+                        disabled={testingDaraja || !credentials.darajaConsumerKey || !credentials.darajaConsumerSecret}
+                        className="inline-flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-brand-500 disabled:opacity-50 transition-colors"
+                      >
+                        {testingDaraja ? (
+                          <>
+                            <svg className="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Authenticating with Safaricom...
+                          </>
+                        ) : (
+                          <>
+                            ⚡ Test Daraja OAuth Connection
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    {darajaTestResult && (
+                      <div className={`text-xs font-medium px-3 py-2 rounded-md border ${
+                        darajaTestResult.success 
+                          ? "bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-500/10 dark:border-emerald-500/20 dark:text-emerald-300"
+                          : "bg-rose-50 border-rose-200 text-rose-800 dark:bg-rose-500/10 dark:border-rose-500/20 dark:text-rose-300"
+                      }`}>
+                        {darajaTestResult.success ? "✅ " : "❌ "}
+                        {darajaTestResult.message}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 

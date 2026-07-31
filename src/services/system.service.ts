@@ -211,4 +211,67 @@ export class SystemService {
       }))
     };
   }
+
+  /**
+   * Get all Tenant Admins across organizations for Super Admin management
+   */
+  static async getTenantAdmins() {
+    return await db.query.users.findMany({
+      where: eq(users.role, "TENANT_ADMIN"),
+      with: { tenant: true },
+      orderBy: sql`created_at DESC`,
+    });
+  }
+
+  /**
+   * Get Super Admin System Team members
+   */
+  static async getSystemTeam() {
+    return await db.query.users.findMany({
+      where: eq(users.role, "SYSTEM_ADMIN"),
+      orderBy: sql`created_at DESC`,
+    });
+  }
+
+  /**
+   * Get complete Tenant details, settings, and assigned Tenant Admins
+   */
+  static async getTenantDetails(tenantId: string) {
+    const tenant = await db.query.tenants.findFirst({
+      where: eq(tenants.id, tenantId),
+      with: { country: true },
+    });
+
+    if (!tenant) throw new Error("Tenant not found.");
+
+    const settings = await db.query.tenantSettings.findFirst({
+      where: eq(tenantSettings.tenantId, tenantId),
+    });
+
+    const tenantUsers = await db.query.users.findMany({
+      where: eq(users.tenantId, tenantId),
+      orderBy: sql`created_at DESC`,
+    });
+
+    return {
+      ...tenant,
+      settings,
+      admins: tenantUsers,
+    };
+  }
+
+  /**
+   * Set custom status for a tenant (active, pending, suspended, declined)
+   */
+  static async setTenantStatus(tenantId: string, status: "active" | "pending" | "suspended" | "declined") {
+    const isActive = status === "active";
+    return await db.update(tenants)
+      .set({ 
+        status, 
+        isActive, 
+        updatedAt: new Date() 
+      })
+      .where(eq(tenants.id, tenantId))
+      .returning();
+  }
 }

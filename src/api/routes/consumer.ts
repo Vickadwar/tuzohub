@@ -107,8 +107,8 @@ app.get("/profile/:id", async (c) => {
 
 // PUT /api/consumers/profile/:id - Update profile
 const updateProfileSchema = z.object({
-  firstName: z.string().optional(),
-  lastName: z.string().optional(),
+  firstName: z.string().optional().nullable(),
+  lastName: z.string().optional().nullable(),
   secondName: z.string().optional().nullable(),
   email: z.string().email().optional().nullable(),
   phoneNumber: z.string().regex(SAFARICOM_REGEX, "Must be a valid Safaricom number").optional(),
@@ -119,6 +119,13 @@ const updateProfileSchema = z.object({
   townId: z.string().uuid().optional().nullable(),
   dealerOrganizationId: z.string().uuid().optional().nullable(),
   onboardedByAgentId: z.string().uuid().optional().nullable(),
+  consumerType: z.string().optional().nullable(),
+  physicalTagId: z.string().optional().nullable(),
+  identificationImageUrl: z.string().optional().nullable(),
+  loyaltyTierId: z.string().uuid().optional().nullable(),
+  preferredLanguage: z.string().optional().nullable(),
+  preferredChannel: z.enum(["USSD", "WEB", "MOBILE_APP", "SMS", "POS", "WHATSAPP"]).optional().nullable(),
+  preferredCategory: z.string().optional().nullable(),
 });
 
 app.put("/profile/:id", zValidator("json", updateProfileSchema), async (c) => {
@@ -137,15 +144,41 @@ app.put("/profile/:id", zValidator("json", updateProfileSchema), async (c) => {
   }
 });
 
-// PATCH /api/consumers/controls/:id - Update feature toggles and limits
+// PATCH /api/consumers/controls/:id - Update feature toggles, limits, consent and capabilities
 const updateControlsSchema = z.object({
+  // Redemption Controls & Limits
   redemptionEnabled: z.boolean().optional(),
+  redemptionDailyLimit: z.union([z.number(), z.string()]).transform(v => v !== null && v !== undefined && v !== "" ? String(v) : null).nullable().optional(),
+  redemptionWeeklyLimit: z.union([z.number(), z.string()]).transform(v => v !== null && v !== undefined && v !== "" ? String(v) : null).nullable().optional(),
+  redemptionMonthlyLimit: z.union([z.number(), z.string()]).transform(v => v !== null && v !== undefined && v !== "" ? String(v) : null).nullable().optional(),
+  redemptionSingleMaxPoints: z.union([z.number(), z.string()]).transform(v => v !== null && v !== undefined && v !== "" ? String(v) : null).nullable().optional(),
+  redemptionRequiresApproval: z.boolean().optional(),
+  redemptionBlockedReason: z.string().nullable().optional(),
+
+  // Banking Controls
   bankingEnabled: z.boolean().optional(),
+  autoBankingThreshold: z.union([z.number(), z.string()]).transform(v => v !== null && v !== undefined && v !== "" ? String(v) : null).nullable().optional(),
+  bankingWithdrawMinPoints: z.union([z.number(), z.string()]).transform(v => v !== null && v !== undefined && v !== "" ? String(v) : null).nullable().optional(),
+
+  // Granular Locks & Capabilities
   canPurchase: z.boolean().optional(),
   canEarnPoints: z.boolean().optional(),
   canRedeemPoints: z.boolean().optional(),
-  redemptionDailyLimit: z.string().optional(),
-  autoBankingThreshold: z.string().optional(),
+  canBankPoints: z.boolean().optional(),
+  canTransferPoints: z.boolean().optional(),
+  canReceiveGifts: z.boolean().optional(),
+  canParticipateInCampaigns: z.boolean().optional(),
+
+  // Marketing & Opt-in Consent Flags
+  marketingOptIn: z.boolean().optional(),
+  smsOptIn: z.boolean().optional(),
+  emailOptIn: z.boolean().optional(),
+  pushOptIn: z.boolean().optional(),
+
+  // Security & KYC flags
+  isVerified: z.boolean().optional(),
+  hasPortalAccess: z.boolean().optional(),
+  riskScore: z.number().int().min(0).max(100).optional(),
 });
 
 app.patch("/controls/:id", zValidator("json", updateControlsSchema), async (c) => {

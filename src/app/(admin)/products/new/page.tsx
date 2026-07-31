@@ -1,35 +1,40 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { authenticatedFetch } from "@/hooks/useApi";
-import ModernSelect from "@/components/ui/ModernSelect";
+import SearchableSelect from "@/components/ui/select/SearchableSelect";
 
-// ─── Field Component ─────────────────────────────────────────────────────────
+// ─── Field Label Wrapper ──────────────────────────────────────────────────────
 function Field({
   label,
   hint,
   required,
   children,
+  action,
 }: {
   label: string;
   hint?: string;
   required?: boolean;
   children: React.ReactNode;
+  action?: React.ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-        {label} {required && <span className="text-rose-500">*</span>}
-      </label>
+      <div className="flex items-center justify-between">
+        <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+          {label} {required && <span className="text-rose-500">*</span>}
+        </label>
+        {action}
+      </div>
       {children}
       {hint && <p className="text-[11px] text-gray-400">{hint}</p>}
     </div>
   );
 }
 
-// ─── Text Input ──────────────────────────────────────────────────────────────
+// ─── Text / Number Input ──────────────────────────────────────────────────────
 function TextInput({
   placeholder,
   type = "text",
@@ -80,57 +85,102 @@ function FormSection({
   );
 }
 
-// ─── Page Component ───────────────────────────────────────────────────────────
+// ─── Main Page Component ──────────────────────────────────────────────────────
 export default function NewProduct() {
   const router = useRouter();
   const [formData, setFormData] = useState({
     sku: "",
     name: "",
     category: "",
-    subcategory: "",
-    unitOfMeasure: "Unit",
+    unitOfMeasure: "",
+    measurementValue: "",
     pointsPerUnit: 0,
     price: "",
     costPrice: "",
+    barcode: "",
+    brand: "",
   });
+
+  const [categoriesList, setCategoriesList] = useState<string[]>([]);
+  const [uomsList, setUomsList] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  // Fetch dynamic categories and units of measure on mount
+  useEffect(() => {
+    async function loadMeta() {
+      try {
+        const data = await authenticatedFetch("/api/products/meta/categories-uom");
+        if (data) {
+          const cats = data.categories || [];
+          const uoms = data.unitsOfMeasure || [];
+          setCategoriesList(cats);
+          setUomsList(uoms);
+          setFormData((prev) => ({
+            ...prev,
+            category: prev.category || (cats.length > 0 ? cats[0] : ""),
+            unitOfMeasure: prev.unitOfMeasure || (uoms.length > 0 ? uoms[0] : ""),
+          }));
+        }
+      } catch (err) {
+        console.warn("Could not fetch product meta options", err);
+      }
+    }
+    loadMeta();
+  }, []);
+
+  // Helper to auto-generate SKU code
+  const autoGenerateSku = () => {
+    const prefix = formData.category
+      ? formData.category.substring(0, 3).toUpperCase()
+      : "PRD";
+    const namePart = formData.name
+      .replace(/[^a-zA-Z0-9]/g, "")
+      .substring(0, 4)
+      .toUpperCase();
+    const randomCode = Math.floor(1000 + Math.random() * 9000);
+    const sku = `${prefix}-${namePart || "ITEM"}-${randomCode}`;
+    setFormData((prev) => ({ ...prev, sku }));
+  };
 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setIsSubmitting(true);
     setError("");
 
-    if (!formData.name || !formData.sku) {
-      setError("Product name and SKU item code are required.");
+    if (!formData.name.trim() || !formData.sku.trim()) {
+      setError("Product Name and SKU item code are required.");
       setIsSubmitting(false);
       return;
     }
 
     try {
-      const cleanedData = {
-        ...formData,
+      const payload = {
+        name: formData.name.trim(),
+        sku: formData.sku.trim(),
+        category: formData.category ? formData.category.trim() : null,
+        unitOfMeasure: formData.unitOfMeasure ? formData.unitOfMeasure.trim() : null,
+        measurementValue: formData.measurementValue ? String(formData.measurementValue) : null,
         pointsPerUnit: parseInt(formData.pointsPerUnit.toString()) || 0,
         price: formData.price.trim() || null,
         costPrice: formData.costPrice.trim() || null,
-        category: formData.category || null,
-        subcategory: formData.subcategory || null,
-        unitOfMeasure: formData.unitOfMeasure || null,
+        barcode: formData.barcode.trim() || formData.sku.trim(),
+        brand: formData.brand.trim() || null,
       };
 
-      const data = await authenticatedFetch("/api/products", {
+      const res = await authenticatedFetch("/api/products", {
         method: "POST",
-        body: JSON.stringify(cleanedData),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
       });
 
-      if (data.success) {
+      if (res) {
         router.push("/products");
       } else {
-        setError(data.error || "Failed to create product.");
+        setError("Failed to create product.");
       }
     } catch (err: any) {
-      const msg = err.info?.error || err.message;
-      setError(typeof msg === "object" ? JSON.stringify(msg) : (msg || "Network error occurred."));
+      setError(err.message || "Network error occurred.");
     } finally {
       setIsSubmitting(false);
     }
@@ -159,11 +209,11 @@ export default function NewProduct() {
               Create New Product
             </h1>
             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-brand-500/10 text-brand-600 dark:text-brand-400 text-xs font-semibold border border-brand-500/20">
-              SKU Registration
+              Item Registration
             </span>
           </div>
           <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-            Add a new product item to your loyalty catalog and configure its earning multipliers.
+            Select from your registered Categories and Units of Measure to add a new product to your master catalog.
           </p>
         </div>
 
@@ -182,10 +232,10 @@ export default function NewProduct() {
             {isSubmitting ? (
               <>
                 <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                Saving...
+                Saving Product...
               </>
             ) : (
-              "Save Product"
+              "Save Product to Catalog"
             )}
           </button>
         </div>
@@ -197,30 +247,44 @@ export default function NewProduct() {
         </div>
       )}
 
-      {/* ── Main Layout: 12-Column Grid ────────────────────────────────────── */}
+      {/* ── Main Layout Grid ─────────────────────────────────────────────────── */}
       <div className="grid grid-cols-12 gap-6">
 
-        {/* ── Left Column: Form (Spans 8 columns) ────────────────────────── */}
+        {/* Form Column (Spans 8 columns) */}
         <div className="col-span-12 xl:col-span-8 space-y-6">
-          <form id="product-form" onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-6">
 
             <FormSection
               step="1"
               title="General Information &amp; Classification"
-              description="Core product identification details and inventory category."
+              description="Product identification details, category selection, and unit of measure."
             >
               <div className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Field label="Product Name" required>
                     <TextInput
-                      placeholder="e.g. Premium Gloss Paint 20L"
+                      placeholder="e.g. 20L Industrial Weatherguard Drum"
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     />
                   </Field>
-                  <Field label="SKU / Item Code" required hint="Unique SKU code identifier">
+
+                  <Field
+                    label="SKU / Item Code"
+                    required
+                    hint="Unique SKU code identifier for POS/USSD"
+                    action={
+                      <button
+                        type="button"
+                        onClick={autoGenerateSku}
+                        className="text-[11px] font-bold text-brand-600 hover:text-brand-700 dark:text-brand-400"
+                      >
+                        ⚡ Auto-Generate
+                      </button>
+                    }
+                  >
                     <TextInput
-                      placeholder="e.g. SKU-PA-9921"
+                      placeholder="e.g. SKU-PNT-20L-WG"
                       value={formData.sku}
                       onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
                     />
@@ -228,31 +292,25 @@ export default function NewProduct() {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Field label="Product Category">
-                    <ModernSelect
-                      options={[
-                        { value: "ECONOMY_RANGE", label: "Economy Range" },
-                        { value: "PREMIUM_RANGE", label: "Premium Range" },
-                        { value: "GLOSS_ENAMEL", label: "Gloss Enamel" },
-                        { value: "EMULSION", label: "Emulsion" },
-                        { value: "PRIMERS", label: "Primers & Undercoats" },
-                      ]}
+                  <Field label="Product Category" required hint="Search or select category">
+                    <SearchableSelect
                       value={formData.category}
                       onChange={(val) => setFormData({ ...formData, category: val })}
-                      placeholder="Select category"
+                      options={categoriesList}
+                      placeholder="-- Select Category --"
+                      settingsUrl="/products/settings"
+                      settingsLabel="+ Add Category in Settings"
                     />
                   </Field>
-                  <Field label="Unit of Measure">
-                    <ModernSelect
-                      options={[
-                        { value: "UNIT", label: "Unit (Piece)" },
-                        { value: "KG", label: "Kilogram (kg)" },
-                        { value: "LITRE", label: "Litre (l)" },
-                        { value: "PACK", label: "Pack / Box" },
-                      ]}
+
+                  <Field label="Unit of Measure (UOM)" required hint="Search or select unit size">
+                    <SearchableSelect
                       value={formData.unitOfMeasure}
                       onChange={(val) => setFormData({ ...formData, unitOfMeasure: val })}
-                      placeholder="Select UOM"
+                      options={uomsList}
+                      placeholder="-- Select Unit of Measure --"
+                      settingsUrl="/products/settings"
+                      settingsLabel="+ Add UOM in Settings"
                     />
                   </Field>
                 </div>
@@ -261,30 +319,65 @@ export default function NewProduct() {
 
             <FormSection
               step="2"
-              title="Pricing &amp; Loyalty Multiplier"
-              description="Point valuations and monetary pricing settings."
+              title="Pricing &amp; Loyalty Base Multiplier"
+              description="Configure item price, cost margin, and base loyalty reward points."
             >
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <Field label="Points Per Unit" hint="Points awarded per item claim">
+                <Field label="Base Points Per Unit" hint="Base points/KES awarded per unit scan">
                   <TextInput
                     type="number"
-                    placeholder="0"
+                    placeholder="e.g. 50, 200"
                     value={formData.pointsPerUnit.toString()}
                     onChange={(e) => setFormData({ ...formData, pointsPerUnit: parseInt(e.target.value) || 0 })}
                   />
                 </Field>
-                <Field label="Retail Price (KES)" hint="Market retail price">
+
+                <Field label="Retail Selling Price (KES)" hint="Public retail price">
                   <TextInput
-                    placeholder="0.00"
+                    placeholder="e.g. 11500.00"
                     value={formData.price}
                     onChange={(e) => setFormData({ ...formData, price: e.target.value })}
                   />
                 </Field>
-                <Field label="Cost Price (KES)" hint="Internal procurement cost">
+
+                <Field label="Cost Price (KES)" hint="Procurement / production cost">
                   <TextInput
-                    placeholder="0.00"
+                    placeholder="e.g. 8200.00"
                     value={formData.costPrice}
                     onChange={(e) => setFormData({ ...formData, costPrice: e.target.value })}
+                  />
+                </Field>
+              </div>
+            </FormSection>
+
+            <FormSection
+              step="3"
+              title="Enterprise Attributes &amp; Specifications (Optional)"
+              description="Additional metadata for POS scanners, barcodes, and brand tracking."
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <Field label="Barcode / EAN-13" hint="Scannable product barcode">
+                  <TextInput
+                    placeholder="e.g. 6001234567890"
+                    value={formData.barcode}
+                    onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
+                  />
+                </Field>
+
+                <Field label="Brand / Manufacturer">
+                  <TextInput
+                    placeholder="e.g. Duracoat, Crown, Apex"
+                    value={formData.brand}
+                    onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
+                  />
+                </Field>
+
+                <Field label="Package Measurement Value">
+                  <TextInput
+                    type="number"
+                    placeholder="e.g. 20.00, 4.00"
+                    value={formData.measurementValue}
+                    onChange={(e) => setFormData({ ...formData, measurementValue: e.target.value })}
                   />
                 </Field>
               </div>
@@ -293,39 +386,27 @@ export default function NewProduct() {
           </form>
         </div>
 
-        {/* ── Right Column: Sidebar (Spans 4 columns) ─────────────────────── */}
+        {/* Sidebar Column (Spans 4 columns) */}
         <div className="col-span-12 xl:col-span-4 space-y-6">
           <div className="bg-white dark:bg-white/[0.02] border border-gray-200/80 dark:border-white/[0.06] p-6 rounded-2xl shadow-sm space-y-4">
             <h3 className="text-sm font-bold text-gray-900 dark:text-white border-b border-gray-100 dark:border-white/5 pb-3">
-              Inventory Guidelines
+              Master Parameters Link
             </h3>
             <div className="space-y-4">
-              {[
-                { title: "SKU Naming Standard", desc: "Use consistent SKU prefixes to ensure fast USSD lookup and batch tracking.", color: "bg-brand-500/10 text-brand-600 dark:text-brand-400" },
-                { title: "Point Valuations", desc: "Setting points allows immediate reward calculations on customer code redemptions.", color: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" },
-                { title: "Price Accuracy", desc: "Accurate cost prices populate your automated campaign ROI metrics.", color: "bg-purple-500/10 text-purple-600 dark:text-purple-400" },
-              ].map((tip, i) => (
-                <div key={i} className="flex gap-3 items-start">
-                  <div className={`p-1.5 rounded-lg shrink-0 ${tip.color}`}>
-                    <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-semibold text-gray-900 dark:text-white">{tip.title}</h4>
-                    <p className="mt-0.5 text-[11px] leading-relaxed text-gray-400">{tip.desc}</p>
-                  </div>
+              <div className="p-3.5 rounded-xl bg-brand-500/10 border border-brand-500/20 text-xs space-y-2">
+                <div className="font-bold text-brand-600 dark:text-brand-400 flex items-center justify-between">
+                  <span>Categories &amp; UOMs</span>
+                  <Link
+                    href="/products/settings"
+                    className="underline hover:text-brand-700 font-mono text-[11px]"
+                  >
+                    Manage Settings →
+                  </Link>
                 </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="bg-gradient-to-br from-gray-900 via-gray-950 to-black border border-gray-800 p-6 rounded-2xl text-white shadow-xl relative overflow-hidden">
-            <div className="relative z-10 space-y-2">
-              <span className="text-[10px] font-semibold text-brand-400">Inventory Telemetry</span>
-              <p className="text-xs font-semibold text-gray-300 leading-relaxed italic">
-                &ldquo;A well-structured product catalog powers reliable point ledger balances and transparent ROI reporting.&rdquo;
-              </p>
+                <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                  Categories and Units of Measure are populated from your organization's Inventory Settings.
+                </p>
+              </div>
             </div>
           </div>
         </div>

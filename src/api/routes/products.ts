@@ -11,9 +11,13 @@ const productSchema = z.object({
   category: z.string().nullable().optional(),
   subcategory: z.string().nullable().optional(),
   unitOfMeasure: z.string().nullable().optional(),
+  measurementValue: z.union([z.number(), z.string()]).transform(val => val !== null && val !== undefined ? String(val) : null).nullable().optional(),
+  barcode: z.string().nullable().optional(),
+  brand: z.string().nullable().optional(),
   pointsPerUnit: z.number().int().min(0).optional(),
   price: z.string().nullable().optional(),
   costPrice: z.string().nullable().optional(),
+  isActive: z.boolean().optional(),
 });
 
 /**
@@ -39,7 +43,115 @@ app.get("/", async (c) => {
       search,
       category,
     });
-    return c.json({ success: true, ...result });
+    return c.json({ success: true, data: result.items, pagination: result.pagination });
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 400);
+  }
+});
+
+/**
+ * GET /api/products/meta/categories-uom
+ * Returns dynamic categories and units of measure for the tenant.
+ */
+app.get("/meta/categories-uom", async (c) => {
+  const user = c.get("user");
+  if (!user.tenantId) {
+    return c.json({ success: false, error: "User tenant not found" }, 403);
+  }
+
+  try {
+    const data = await ProductService.getCategoriesAndUoms(user.tenantId);
+    return c.json({ success: true, data });
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 400);
+  }
+});
+
+/**
+ * GET /api/products/settings
+ * Returns inventory & catalog settings breakdown.
+ */
+app.get("/settings", async (c) => {
+  const user = c.get("user");
+  if (!user.tenantId) {
+    return c.json({ success: false, error: "User tenant not found" }, 403);
+  }
+
+  try {
+    const data = await ProductService.getInventorySettings(user.tenantId);
+    return c.json({ success: true, data });
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 400);
+  }
+});
+
+/**
+ * POST /api/products/settings/categories
+ */
+app.post("/settings/categories", async (c) => {
+  const user = c.get("user");
+  if (!user.tenantId) {
+    return c.json({ success: false, error: "User tenant not found" }, 403);
+  }
+
+  try {
+    const body = await c.req.json();
+    const category = await ProductService.addCategory(user.tenantId, body.name, body.description);
+    return c.json({ success: true, data: category });
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 400);
+  }
+});
+
+/**
+ * DELETE /api/products/settings/categories/:id
+ */
+app.delete("/settings/categories/:id", async (c) => {
+  const user = c.get("user");
+  const id = c.req.param("id");
+  if (!user.tenantId) {
+    return c.json({ success: false, error: "User tenant not found" }, 403);
+  }
+
+  try {
+    await ProductService.deleteCategory(user.tenantId, id);
+    return c.json({ success: true, message: "Category deleted" });
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 400);
+  }
+});
+
+/**
+ * POST /api/products/settings/uoms
+ */
+app.post("/settings/uoms", async (c) => {
+  const user = c.get("user");
+  if (!user.tenantId) {
+    return c.json({ success: false, error: "User tenant not found" }, 403);
+  }
+
+  try {
+    const body = await c.req.json();
+    const uom = await ProductService.addUom(user.tenantId, body.name, body.symbol);
+    return c.json({ success: true, data: uom });
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 400);
+  }
+});
+
+/**
+ * DELETE /api/products/settings/uoms/:id
+ */
+app.delete("/settings/uoms/:id", async (c) => {
+  const user = c.get("user");
+  const id = c.req.param("id");
+  if (!user.tenantId) {
+    return c.json({ success: false, error: "User tenant not found" }, 403);
+  }
+
+  try {
+    await ProductService.deleteUom(user.tenantId, id);
+    return c.json({ success: true, message: "Unit of measure deleted" });
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 400);
   }
@@ -94,6 +206,21 @@ app.patch("/:id", zValidator("json", productSchema.partial()), async (c) => {
   try {
     const product = await ProductService.updateProduct(id, user.tenantId, body as any);
     return c.json({ success: true, data: product });
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 400);
+  }
+});
+
+/**
+ * DELETE /api/products/:id
+ */
+app.delete("/:id", async (c) => {
+  const user = c.get("user");
+  const id = c.req.param("id");
+
+  try {
+    const deleted = await ProductService.deleteProduct(id, user.tenantId);
+    return c.json({ success: true, message: "Product deleted successfully", data: deleted });
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 400);
   }

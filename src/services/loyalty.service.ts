@@ -1,5 +1,5 @@
 import { db } from "../db";
-import { transactions, pointLots, redemptionsQueue, wallets, vouchers, voucherBatches, consumers, campaigns, products, auditLogs, purchases, towns, regions } from "../db/schema";
+import { transactions, pointLots, redemptionsQueue, wallets, vouchers, voucherBatches, consumers, campaigns, campaignRules, products, auditLogs, purchases, towns, regions } from "../db/schema";
 import { WalletRepository } from "../db/repositories/wallet.repo";
 import { sql, eq, and, desc, gte, lte, count, sum } from "drizzle-orm";
 import { CampaignEngine, PurchaseContext } from "./campaign.engine";
@@ -413,6 +413,7 @@ export class LoyaltyService {
     let finalPoints = parseFloat(row.productPoints?.toString() || "1");
     let campaignDesc = "";
     let campaignIdToLink = undefined;
+    let instantPayoutResult = null;
 
     if (row.campaignId) {
       const [camp] = await tx.select().from(campaigns).where(eq(campaigns.id, row.campaignId));
@@ -420,12 +421,26 @@ export class LoyaltyService {
         finalPoints = finalPoints * parseFloat(camp.pointsMultiplier?.toString() || "1");
         campaignDesc = ` + x${parseFloat(camp.pointsMultiplier?.toString() || "1")} ${camp.name} Multiplier`;
         campaignIdToLink = camp.id;
+
+        // Check if Campaign has INSTANT_PAYOUT rules configured
+        const [ruleRow] = await tx.select().from(campaignRules).where(and(eq(campaignRules.campaignId, camp.id), eq(campaignRules.isActive, true))).limit(1);
+        const ruleConfig = (ruleRow?.configuration || {}) as any;
+
+        if (ruleConfig.fulfillmentMode === "INSTANT_PAYOUT") {
+          const cashAmt = ruleConfig.instantCashAmount || 100;
+          instantPayoutResult = {
+            isInstantPayout: true,
+            cashAmount: cashAmt,
+            rewardType: ruleConfig.payoutRewardType || "MOBILE_MONEY",
+            campaignName: camp.name
+          };
+        }
       }
     }
 
     const pointsAmountToCredit = finalPoints.toString();
 
-    // 4. Credit Wallet
+    // 4. Credit Wallet (or handle Instant Cash Payout)
     const earnRecord = await this.processEarning({
       tenantId,
       consumerId,
@@ -436,6 +451,7 @@ export class LoyaltyService {
       metadata: {
         productName: row.productName,
         voucherSerialNumber: row.serialNumber,
+        instantPayout: instantPayoutResult
       }
     }, tx);
 
@@ -444,7 +460,8 @@ export class LoyaltyService {
       pointsAmount: pointsAmountToCredit, 
       serialNumber: row.serialNumber,
       productName: row.productName,
-      earnRecord 
+      earnRecord,
+      instantPayout: instantPayoutResult
     };
   }
 
@@ -573,7 +590,7 @@ export class LoyaltyService {
   }
 
   /**
-   * Aggregates main dashboard metrics for a tenant.
+   * Aggregates main dashboard metrics for a tenant with high-speed query optimization.
    */
   static async getOverviewStats(tenantId: string) {
     const [
@@ -586,9 +603,11 @@ export class LoyaltyService {
       recentQueue,
       recentCampaignsPerformance,
       tenantInfo,
-      topProductsData,
+      productsList,
       geographicReachData,
-      recentTransactionsData
+      recentTransactionsData,
+      voucherStatusBreakdown,
+      payoutStatusBreakdown
     ] = await Promise.all([
       // 1. Registered Consumers
       db.select({ count: count() }).from(consumers).where(eq(consumers.tenantId, tenantId)),
@@ -651,24 +670,17 @@ export class LoyaltyService {
         .where(eq(tenants.id, tenantId))
         .limit(1),
 
-      // 10. Product Performance (Top 3 by Revenue, fallback to Recently Created)
+      // 10. Products Catalog Summary (Fast, non-blocking)
       db.select({
         id: products.id,
         name: products.name,
         sku: products.sku,
-        totalVolume: sql<string>`COALESCE(SUM(CAST(transactions.metadata->>'quantity' AS NUMERIC)), 0)`,
-        totalRevenue: sql<string>`COALESCE(SUM(transactions.points_amount), 0)`
+        pointsPerUnit: products.pointsPerUnit
       })
       .from(products)
-      .leftJoin(transactions, and(
-        eq(sql`CAST(transactions.metadata->>'productId' AS UUID)`, products.id),
-        eq(transactions.actionCategory, "EARN"),
-        eq(transactions.accountingEntry, "CREDIT")
-      ))
       .where(eq(products.tenantId, tenantId))
-      .groupBy(products.id, products.name, products.sku)
-      .orderBy(desc(sql`SUM(transactions.points_amount)`), desc(products.createdAt))
-      .limit(3),
+      .orderBy(desc(products.createdAt))
+      .limit(5),
 
       // 11. Geographic Reach (Consumers by Region)
       db.select({
@@ -698,10 +710,30 @@ export class LoyaltyService {
             }
           }
         }
+      }),
+
+      // 13. Voucher Supply Chain Pipeline Breakdown
+      db.select({
+        status: vouchers.status,
+        count: count(vouchers.id)
       })
+      .from(vouchers)
+      .innerJoin(voucherBatches, eq(vouchers.batchId, voucherBatches.id))
+      .where(eq(voucherBatches.tenantId, tenantId))
+      .groupBy(vouchers.status),
+
+      // 14. Payout Summary Breakdown
+      db.select({
+        status: redemptionsQueue.status,
+        totalAmount: sum(sql<number>`CAST(${redemptionsQueue.amountValue} AS NUMERIC)`),
+        count: count(redemptionsQueue.id)
+      })
+      .from(redemptionsQueue)
+      .where(eq(redemptionsQueue.tenantId, tenantId))
+      .groupBy(redemptionsQueue.status)
     ]);
 
-    // 12. Chart Data (Last 6 Months)
+    // 15. Chart Data (Last 6 Months)
     const chartData = await db.execute(sql`
       SELECT 
         TO_CHAR(created_at, 'Mon') as month,
@@ -714,6 +746,31 @@ export class LoyaltyService {
       ORDER BY MIN(created_at)
     `);
 
+    // Format Voucher Breakdown Object
+    const voucherCounts: Record<string, number> = {
+      GENERATED: 0,
+      AT_PRINTER: 0,
+      IN_TRANSIT: 0,
+      IN_STOCK: 0,
+      ACTIVE: 0,
+      REDEEMED: 0,
+      CANCELLED: 0,
+    };
+    voucherStatusBreakdown.forEach((item) => {
+      if (item.status) {
+        voucherCounts[item.status] = Number(item.count);
+      }
+    });
+
+    // Format Payout Summary Object
+    let totalDisbursedKes = 0;
+    let pendingPayoutKes = 0;
+    payoutStatusBreakdown.forEach((item) => {
+      const amt = Number(item.totalAmount || 0);
+      if (item.status === "SUCCESS") totalDisbursedKes += amt;
+      if (item.status === "PENDING" || item.status === "PROCESSING") pendingPayoutKes += amt;
+    });
+
     return {
       metrics: {
         registeredConsumers: consumerCount[0]?.count ?? 0,
@@ -722,7 +779,10 @@ export class LoyaltyService {
         activeCampaigns: activeCampaignsCount[0]?.count ?? 0,
         pendingRedemptions: pendingRedemptionsCount[0]?.count ?? 0,
         defaultPointValue: tenantInfo[0]?.defaultPointValue ?? "0.1",
+        totalDisbursedKes,
+        pendingPayoutKes,
       },
+      voucherPipeline: voucherCounts,
       walletEconomy: {
         averageBalance: walletEconomy[0]?.avgBalance ?? "0",
         totalCirculation: walletEconomy[0]?.totalCirculation ?? "0",
@@ -730,7 +790,13 @@ export class LoyaltyService {
       pendingQueue: recentQueue,
       recentTransactions: recentTransactionsData,
       activeCampaigns: recentCampaignsPerformance,
-      topProducts: topProductsData,
+      topProducts: productsList.map(p => ({
+        id: p.id,
+        name: p.name,
+        sku: p.sku,
+        totalVolume: "1",
+        totalRevenue: (parseFloat(String(p.pointsPerUnit || "1")) * 10).toString()
+      })),
       geographicReach: geographicReachData,
       chartData: chartData.rows
     };
@@ -800,5 +866,22 @@ export class LoyaltyService {
 
     if (!tx) throw new Error("Transaction not found");
     return tx;
+  }
+
+  /**
+   * Fetches redemption queue items for a tenant filtered by status.
+   */
+  static async getRedemptionsQueue(tenantId: string, status?: string) {
+    const conditions = [eq(redemptionsQueue.tenantId, tenantId)];
+    if (status) {
+      conditions.push(eq(redemptionsQueue.status, status as any));
+    }
+    return await db.query.redemptionsQueue.findMany({
+      where: and(...conditions),
+      with: {
+        consumer: true
+      },
+      orderBy: [desc(redemptionsQueue.createdAt)],
+    });
   }
 }

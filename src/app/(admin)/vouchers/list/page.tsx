@@ -15,12 +15,40 @@ import ModernSelect from "@/components/ui/ModernSelect";
 import { BoxCubeIcon } from "@/icons";
 
 const STATUS_COLORS: Record<string, any> = {
-  PRINTED: "light",
-  ACTIVE: "info",
+  GENERATED: "light",
+  "At Printer Press": "warning",
+  AT_PRINTER: "warning",
+  "In Transit": "purple",
+  IN_TRANSIT: "purple",
+  "In Stock": "info",
+  IN_STOCK: "info",
+  Active: "success",
+  ACTIVE: "success",
+  Redeemed: "success",
   REDEEMED: "success",
-  USED: "success",
-  VOID: "error",
+  CANCELLED: "error",
   EXPIRED: "error",
+};
+
+const formatStatusLabel = (status: string): string => {
+  if (!status) return "";
+  const map: Record<string, string> = {
+    GENERATED: "Generated",
+    AT_PRINTER: "At Printer Press",
+    IN_TRANSIT: "In Transit",
+    IN_STOCK: "In Stock",
+    ACTIVE: "Active",
+    REDEEMED: "Redeemed",
+    CANCELLED: "Cancelled",
+    EXPIRED: "Expired",
+    PENDING: "Pending",
+    PROCESSING: "Processing",
+    SUCCESS: "Success",
+    FAILED: "Failed",
+  };
+  if (map[status.toUpperCase()]) return map[status.toUpperCase()];
+  const cleaned = status.replace(/_/g, " ").toLowerCase();
+  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
 };
 
 export default function VoucherList() {
@@ -35,36 +63,36 @@ export default function VoucherList() {
   const { data: result, isLoading } = useApi<any>(`/vouchers?${params}`);
   const { data: batchesRes } = useApi<any>("/vouchers/batches");
 
-  const batchOptions = (Array.isArray(batchesRes) ? batchesRes : (batchesRes?.data || [])).map((b: any) => ({
+  const batchOptions = (Array.isArray(batchesRes) ? batchesRes : batchesRes?.data || []).map((b: any) => ({
     value: b.id,
     label: `${b.batchNumber} (${b.quantity} cards)`,
   }));
 
   const statusOptions = [
     { value: "PRINTED", label: "Printed" },
+    { value: "IN_TRANSIT", label: "In Transit" },
     { value: "ACTIVE", label: "Active" },
     { value: "REDEEMED", label: "Redeemed" },
-    { value: "VOID", label: "Void" },
+    { value: "CANCELLED", label: "Cancelled" },
     { value: "EXPIRED", label: "Expired" },
   ];
 
-  const vouchers: any[] = Array.isArray(result) ? result : (result?.data || []);
+  const vouchers: any[] = Array.isArray(result) ? result : result?.data || [];
   const pagination = result && !Array.isArray(result) ? result.pagination : null;
 
   return (
     <div className="w-full space-y-6 animate-fadeIn pb-12">
-
       {/* ── Page Header ──────────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-gray-200/80 dark:border-white/[0.06] pb-5">
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white">Voucher Inventory</h1>
             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-brand-500/10 text-brand-600 dark:text-brand-400 text-xs font-semibold border border-brand-500/20">
-              Serial Ledger
+              Serial Audit Ledger
             </span>
           </div>
           <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            Browse and inspect every individual scratch card security token in your platform catalog.
+            Browse and inspect every individual scratch card security token, denomination value, and redemption audit.
           </p>
         </div>
         <Link
@@ -84,7 +112,10 @@ export default function VoucherList() {
           <ModernSelect
             options={batchOptions}
             value={batchFilter}
-            onChange={(val) => { setBatchFilter(val); setPage(1); }}
+            onChange={(val) => {
+              setBatchFilter(val);
+              setPage(1);
+            }}
             placeholder="All batches"
           />
         </div>
@@ -92,7 +123,10 @@ export default function VoucherList() {
           <ModernSelect
             options={statusOptions}
             value={statusFilter}
-            onChange={(val) => { setStatusFilter(val); setPage(1); }}
+            onChange={(val) => {
+              setStatusFilter(val);
+              setPage(1);
+            }}
             placeholder="All statuses"
           />
         </div>
@@ -112,45 +146,64 @@ export default function VoucherList() {
             <TableHeader>
               <TableRow className="bg-gray-50/50 dark:bg-white/[0.01]">
                 <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400">Serial Number</TableCell>
-                <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400">Batch Code</TableCell>
-                <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400">Linked Product</TableCell>
+                <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400">Batch Ref</TableCell>
+                <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400">Denomination</TableCell>
+                <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400">Target Binding</TableCell>
                 <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400">Status</TableCell>
                 <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400">Claimed Date</TableCell>
                 <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400 text-right">Actions</TableCell>
               </TableRow>
             </TableHeader>
             <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.04]">
-              {vouchers.length > 0 ? vouchers.map((v: any) => (
-                <TableRow key={v.id} className="hover:bg-gray-50/50 dark:hover:bg-white/[0.02] transition-colors">
-                  <TableCell className="py-3.5 px-6">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-brand-500/10 text-brand-600 dark:text-brand-400 flex items-center justify-center font-bold text-xs border border-brand-500/20 shrink-0 shadow-2xs">
-                        <BoxCubeIcon className="w-3.5 h-3.5" />
-                      </div>
-                      <span className="font-mono text-xs font-bold text-gray-900 dark:text-white tracking-wider">{v.serialNumber}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="py-3.5 px-6">
-                    <span className="font-mono text-xs font-semibold text-gray-600 dark:text-gray-300">{v.batchNumber}</span>
-                  </TableCell>
-                  <TableCell className="py-3.5 px-6 text-xs text-gray-600 dark:text-gray-300 font-medium">
-                    {v.productName || <span className="text-gray-400 italic">Not linked</span>}
-                  </TableCell>
-                  <TableCell className="py-3.5 px-6">
-                    <Badge size="sm" color={STATUS_COLORS[v.status] || "light"}>{v.status}</Badge>
-                  </TableCell>
-                  <TableCell className="py-3.5 px-6 text-xs text-gray-500 font-medium">
-                    {v.redeemedAt ? new Date(v.redeemedAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : <span className="text-gray-400">—</span>}
-                  </TableCell>
-                  <TableCell className="py-3.5 px-6 text-right">
-                    <Link href={`/vouchers/${v.id}`} className="text-xs font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 transition">
-                      Details
-                    </Link>
-                  </TableCell>
-                </TableRow>
-              )) : (
+              {vouchers.length > 0 ? (
+                vouchers.map((v: any) => {
+                  const isValuePool = v.batchType === "VALUE_BASED";
+                  return (
+                    <TableRow key={v.id} className="hover:bg-gray-50/50 dark:hover:bg-white/[0.02] transition-colors">
+                      <TableCell className="py-3.5 px-6">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-brand-500/10 text-brand-600 dark:text-brand-400 flex items-center justify-center font-bold text-xs border border-brand-500/20 shrink-0 shadow-2xs">
+                            <BoxCubeIcon className="w-3.5 h-3.5" />
+                          </div>
+                          <span className="font-mono text-xs font-bold text-gray-900 dark:text-white tracking-wider">{v.serialNumber}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="py-3.5 px-6">
+                        <span className="font-mono text-xs font-semibold text-gray-600 dark:text-gray-300">{v.batchNumber}</span>
+                      </TableCell>
+                      <TableCell className="py-3.5 px-6 font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                        KES {Number(v.rewardDenomination || 50).toFixed(2)}
+                      </TableCell>
+                      <TableCell className="py-3.5 px-6 text-xs text-gray-600 dark:text-gray-300 font-medium">
+                        {v.productName ? (
+                          <span className="font-semibold text-gray-900 dark:text-white">{v.productName}</span>
+                        ) : (
+                          <span className="text-amber-600 dark:text-amber-400 italic">Generic Pool</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="py-3.5 px-6">
+                        <Badge size="sm" color={STATUS_COLORS[v.status] || "light"}>
+                          {formatStatusLabel(v.status)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="py-3.5 px-6 text-xs text-gray-500 font-medium">
+                        {v.redeemedAt ? (
+                          new Date(v.redeemedAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
+                        ) : (
+                          <span className="text-gray-400">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="py-3.5 px-6 text-right">
+                        <Link href={`/vouchers/${v.id}`} className="text-xs font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 transition">
+                          Details &rarr;
+                        </Link>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              ) : (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-16 text-center text-xs text-gray-400 italic font-medium">
+                  <TableCell colSpan={7} className="py-16 text-center text-xs text-gray-400 italic font-medium">
                     No vouchers found. {!batchFilter && "Generate a batch first to see serial items."}
                   </TableCell>
                 </TableRow>
@@ -163,18 +216,20 @@ export default function VoucherList() {
       {/* ── Pagination ────────────────────────────────────────────────────── */}
       {pagination && pagination.total > 50 && (
         <div className="flex items-center justify-between pt-2">
-          <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">Page {page} of {Math.ceil(pagination.total / 50)}</span>
+          <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">
+            Page {page} of {Math.ceil(pagination.total / 50)}
+          </span>
           <div className="flex items-center gap-2">
             <button
               disabled={page <= 1}
-              onClick={() => setPage(p => p - 1)}
+              onClick={() => setPage((p) => p - 1)}
               className="px-3.5 py-1.5 text-xs font-semibold rounded-xl bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-gray-300 hover:bg-gray-200 transition disabled:opacity-50"
             >
               Previous
             </button>
             <button
               disabled={page * 50 >= pagination.total}
-              onClick={() => setPage(p => p + 1)}
+              onClick={() => setPage((p) => p + 1)}
               className="px-3.5 py-1.5 text-xs font-semibold rounded-xl bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-gray-300 hover:bg-gray-200 transition disabled:opacity-50"
             >
               Next

@@ -1,15 +1,15 @@
 import { db } from "../db";
-import { usageMeters, invoices, tenants, systemConfig } from "../db/schema";
+import { usageMeters, invoices, tenants } from "../db/schema";
 import { eq, and, sql } from "drizzle-orm";
+import { v4 as uuidv4 } from "uuid";
 
 export class BillingService {
   /**
-   * Used in Middlewares to increment usage automatically.
+   * Record metric usage automatically.
    */
   static async recordUsage(tenantId: string, metricName: string, quantity = 1, tx: any = db) {
-    const currentMonth = new Date().toISOString().slice(0, 7) + "-01"; // e.g. 2026-04-01
+    const currentMonth = new Date().toISOString().slice(0, 7) + "-01";
 
-    // Optimistic UPSERT equivalent
     const [existing] = await tx.select().from(usageMeters)
       .where(and(eq(usageMeters.tenantId, tenantId), eq(usageMeters.metricName, metricName), eq(usageMeters.billingPeriodStart, new Date(currentMonth))))
       .limit(1);
@@ -34,40 +34,62 @@ export class BillingService {
   }
 
   static async generateInvoice(tenantId: string, tx: any = db) {
-    // 1. Calculate costs based on usageMeters for previous month
-    // 2. Fetch tenant active plan details
-    // 3. Create invoice row
-    
     const [tenant] = await tx.select().from(tenants).where(eq(tenants.id, tenantId)).limit(1);
-    
-    // Simplistic demo invoice generation
-    const baseFee = tenant.subscriptionPlan === "ENTERPRISE" ? "5000" : "1000";
+    const baseFee = tenant?.plan === "enterprise" ? "5000.00" : "1000.00";
 
     const [invoice] = await tx.insert(invoices).values({
+      id: uuidv4(),
       tenantId,
       invoiceNumber: `INV-${Date.now()}`,
-      periodStart: new Date(),
-      periodEnd: new Date(),
-      baseFee,
-      usageFee: "0",
-      totalAmount: baseFee,
-      status: "DRAFT",
-      dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000) // 14 days
+      amount: baseFee,
+      items: [{ description: "Base Monthly Subscription", amount: baseFee }],
+      status: "PENDING",
+      dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)
     }).returning();
 
     return invoice;
   }
 
   static async getInvoices(tenantId: string, tx: any = db) {
-    return await tx.select().from(invoices).where(eq(invoices.tenantId, tenantId));
+    return await tx.select({
+      id: invoices.id,
+      tenantId: invoices.tenantId,
+      invoiceNumber: invoices.invoiceNumber,
+      totalAmount: invoices.amount,
+      status: invoices.status,
+      dueDate: invoices.dueDate,
+      createdAt: invoices.createdAt,
+    }).from(invoices).where(eq(invoices.tenantId, tenantId));
   }
 
   static async getAllInvoices(tx: any = db) {
-    return await tx.query.invoices.findMany({
-      with: {
-        tenant: true
-      },
-      orderBy: sql`created_at DESC`
-    });
+    const results = await tx.select({
+      id: invoices.id,
+      tenantId: invoices.tenantId,
+      invoiceNumber: invoices.invoiceNumber,
+      totalAmount: invoices.amount,
+      status: invoices.status,
+      dueDate: invoices.dueDate,
+      createdAt: invoices.createdAt,
+      tenantName: tenants.name,
+      plan: tenants.plan,
+    })
+    .from(invoices)
+    .leftJoin(tenants, eq(invoices.tenantId, tenants.id))
+    .orderBy(sql`invoices.created_at DESC`);
+
+    return results.map((r: any) => ({
+      id: r.id,
+      tenantId: r.tenantId,
+      invoiceNumber: r.invoiceNumber,
+      totalAmount: r.totalAmount,
+      status: r.status,
+      dueDate: r.dueDate,
+      createdAt: r.createdAt,
+      tenant: {
+        name: r.tenantName,
+        subscriptionPlan: r.plan ? r.plan.toUpperCase() : "BASIC"
+      }
+    }));
   }
 }

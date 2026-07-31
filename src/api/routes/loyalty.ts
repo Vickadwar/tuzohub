@@ -78,6 +78,26 @@ app.get("/balance", async (c) => {
 });
 
 /**
+ * GET /api/loyalty/redemptions?status=PENDING
+ * Returns the redemptions queue for a tenant.
+ */
+app.get("/redemptions", async (c) => {
+  const user = c.get("user");
+  const status = c.req.query("status");
+
+  if (!user.tenantId) {
+    return c.json({ success: false, error: "User tenant not found" }, 403);
+  }
+
+  try {
+    const queue = await LoyaltyService.getRedemptionsQueue(user.tenantId, status);
+    return c.json({ success: true, data: queue });
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+/**
  * GET /api/loyalty/history?consumerId=<uuid>&page=1&limit=20&type=CREDIT&from=...&to=...
  * Returns paginated transaction history for a consumer.
  */

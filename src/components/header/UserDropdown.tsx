@@ -47,9 +47,9 @@ export default function UserDropdown() {
     <div className="relative">
       <button
         onClick={toggleDropdown} 
-        className="flex items-center gap-2.5 text-gray-700 dark:text-gray-300 dropdown-toggle focus:outline-none"
+        className="flex items-center gap-2 p-1 pr-2.5 text-gray-700 dark:text-gray-300 dropdown-toggle focus:outline-none bg-gray-100/60 hover:bg-gray-200/70 dark:bg-white/[0.06] dark:hover:bg-white/10 border border-gray-200/50 dark:border-white/[0.08] rounded-full transition-all shadow-2xs backdrop-blur-xs"
       >
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-500/10 text-brand-600 dark:bg-brand-500/20 dark:text-brand-400 font-bold text-xs border border-brand-500/20 shadow-2xs">
+        <span className="flex h-7.5 w-7.5 shrink-0 items-center justify-center rounded-full bg-brand-500 text-white font-black text-[11px] shadow-2xs">
           {getInitials(user?.firstName, user?.lastName)}
         </span>
 

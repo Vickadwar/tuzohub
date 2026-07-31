@@ -2,6 +2,7 @@ import { db } from "../db";
 import { externalWebhooks, tenantSettings } from "../db/schema";
 import { eq, and } from "drizzle-orm";
 import { DarajaService } from "./daraja.service";
+import { getAppBaseUrl } from "../lib/domain";
 
 export interface PayoutRequest {
   tenantId: string;
@@ -119,8 +120,8 @@ export class MpesaPayoutProvider implements PayoutProvider {
         initiatorPassword: "", // Not used in sendPayout currently, we use security credential
         securityCredential: creds.darajaSecurityCredential || "PLACEHOLDER",
         baseUrl: creds.darajaBaseUrl || "https://sandbox.safaricom.co.ke",
-        callbackUrl: `https://${process.env.APP_DOMAIN || "tuzohub.com"}/api/mpesa/b2c/callback?tenantId=${request.tenantId}`,
-        queueTimeOutUrl: `https://${process.env.APP_DOMAIN || "tuzohub.com"}/api/mpesa/b2c/timeout?tenantId=${request.tenantId}`,
+        callbackUrl: `${getAppBaseUrl()}/api/mpesa/b2c/callback?tenantId=${request.tenantId}`,
+        queueTimeOutUrl: `${getAppBaseUrl()}/api/mpesa/b2c/timeout?tenantId=${request.tenantId}`,
       };
 
       // 3. Execute Payout

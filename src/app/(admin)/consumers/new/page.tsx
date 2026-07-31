@@ -87,18 +87,18 @@ export default function NewConsumer() {
         physicalTagId: formData.physicalTagId.trim() || null,
       };
 
-      const res = await authenticatedFetch("/api/consumers", {
+      const data = await authenticatedFetch("/api/consumers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(cleanedData),
       });
 
-      const data = await res.json().catch(() => res);
-
-      if (data.success || res.ok) {
+      if (data?.data?.id) {
+        router.push(`/consumers/${data.data.id}`);
+      } else if (data) {
         router.push("/consumers");
       } else {
-        setError(typeof data.error === "object" ? JSON.stringify(data.error) : data.error || "Failed to register consumer.");
+        setError("Failed to register consumer.");
       }
     } catch (err: any) {
       setError(err.message || "Network error occurred.");
