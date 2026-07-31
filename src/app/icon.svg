@@ -14,19 +14,12 @@
     </filter>
   </defs>
 
-  <!-- Base Squircle -->
   <rect width="64" height="64" rx="18" fill="url(#tuzoGrad)"/>
-  
-  <!-- Subtle Inner Border Highlight -->
   <rect x="1" y="1" width="62" height="62" rx="17" stroke="url(#tuzoGlow)" stroke-width="1.5" fill="none"/>
 
-  <!-- Icon Mark: 3D Stacked Reward Diamonds -->
   <g filter="url(#shadow)">
-    <!-- Top Layer -->
     <path d="M32 14L48 22L32 30L16 22L32 14Z" fill="#FFFFFF" fill-opacity="0.95"/>
-    <!-- Middle Layer -->
     <path d="M16 28L32 36L48 28" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"/>
-    <!-- Bottom Layer -->
     <path d="M16 34L32 42L48 34" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.6"/>
   </g>
 </svg>

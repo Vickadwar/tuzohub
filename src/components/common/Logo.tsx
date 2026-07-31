@@ -4,7 +4,7 @@ import React from "react";
 import Link from "next/link";
 
 interface LogoProps {
-  size?: "sm" | "md" | "lg";
+  size?: "sm" | "md" | "lg" | "xl";
   collapsed?: boolean;
   href?: string;
   className?: string;
@@ -25,23 +25,25 @@ export const Logo: React.FC<LogoProps> = ({
     sm: "w-7 h-7 text-[11px]",
     md: "w-8.5 h-8.5 text-xs",
     lg: "w-10 h-10 text-sm",
+    xl: "w-12 h-12 text-base",
   };
 
   const textSizes = {
     sm: "text-sm",
     md: "text-base",
     lg: "text-xl",
+    xl: "text-2xl",
   };
 
   const logoMark = (
     <div className={`relative group shrink-0 ${iconSizes[size]}`}>
-      {/* Subtle Ambient Glow */}
-      <div className="absolute -inset-0.5 rounded-xl bg-brand-500/30 dark:bg-brand-500/40 opacity-70 blur-xs group-hover:opacity-100 transition-opacity" />
+      {/* Outer Vibrant Glow Ring */}
+      <div className="absolute -inset-0.5 rounded-xl bg-gradient-to-r from-brand-600 via-blue-500 to-cyan-500 opacity-80 blur-xs group-hover:opacity-100 transition-opacity" />
 
       {/* Main Icon Mark */}
-      <div className="relative w-full h-full rounded-xl bg-gradient-to-tr from-brand-600 via-brand-500 to-indigo-500 flex items-center justify-center text-white font-black shadow-sm shadow-brand-500/25 border border-white/20">
-        <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+      <div className="relative w-full h-full rounded-xl bg-gradient-to-tr from-brand-600 via-blue-600 to-cyan-500 flex items-center justify-center text-white font-black shadow-md shadow-brand-500/30 border border-white/30">
+        <svg className="w-4.5 h-4.5 stroke-[2.5]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 3L2 8l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
         </svg>
       </div>
     </div>
@@ -54,18 +56,18 @@ export const Logo: React.FC<LogoProps> = ({
       {!collapsed && (
         <div className="flex flex-col min-w-0 justify-center">
           <div className="flex items-baseline leading-none">
-            {/* Tuzo - BOLD */}
+            {/* Tuzo - BOLD DARK / WHITE */}
             <span className={`font-black tracking-tight text-gray-900 dark:text-white ${textSizes[size]}`}>
               Tuzo
             </span>
-            {/* Hub - FADED / LIGHT */}
-            <span className={`font-extralight tracking-normal text-gray-400 dark:text-gray-500 opacity-70 ${textSizes[size]} ml-0.5`}>
+            {/* Hub - VIBRANT BRAND BLUE / CYAN (High contrast & crisp visibility) */}
+            <span className={`font-black tracking-tight text-brand-600 dark:text-cyan-400 ${textSizes[size]} ml-0.5`}>
               Hub
             </span>
           </div>
 
           {showSubtitle && (
-            <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500 tracking-wide truncate mt-1 leading-tight">
+            <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 tracking-wide truncate mt-1 leading-tight uppercase">
               {subtitleText || "Enterprise Loyalty Switch"}
             </span>
           )}

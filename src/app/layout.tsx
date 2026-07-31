@@ -8,10 +8,13 @@ import { ThemeProvider } from '@/context/ThemeContext';
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "TuZoHub | Loyalty Management System",
-  description: "Innovative Loyalty & Payout Management for the African Market",
+  title: "TuzoHub | Enterprise B2B2C Loyalty & Payout Engine",
+  description: "Automated Loyalty, Voucher Logistics & Safaricom M-Pesa B2C Cash Disbursements",
   icons: {
-    icon: "/favicon.svg",
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+    ],
+    apple: "/favicon.svg",
   },
 };
 
