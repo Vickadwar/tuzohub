@@ -37,13 +37,13 @@ export const Logo: React.FC<LogoProps> = ({
 
   const logoMark = (
     <div className={`relative group shrink-0 ${iconSizes[size]}`}>
-      {/* Outer Vibrant Glow Ring */}
-      <div className="absolute -inset-0.5 rounded-xl bg-gradient-to-r from-brand-600 via-blue-500 to-cyan-500 opacity-80 blur-xs group-hover:opacity-100 transition-opacity" />
+      {/* Ambient Glow */}
+      <div className="absolute -inset-0.5 rounded-xl bg-brand-500/30 dark:bg-brand-500/40 opacity-75 blur-xs group-hover:opacity-100 transition-opacity" />
 
-      {/* Main Icon Mark */}
-      <div className="relative w-full h-full rounded-xl bg-gradient-to-tr from-brand-600 via-blue-600 to-cyan-500 flex items-center justify-center text-white font-black shadow-md shadow-brand-500/30 border border-white/30">
+      {/* Original Layered Stack Icon Mark - Clean & Sharp */}
+      <div className="relative w-full h-full rounded-xl bg-gradient-to-tr from-brand-600 via-brand-500 to-indigo-500 flex items-center justify-center text-white font-black shadow-sm shadow-brand-500/25 border border-white/20">
         <svg className="w-4.5 h-4.5 stroke-[2.5]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 3L2 8l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
         </svg>
       </div>
     </div>
@@ -56,18 +56,18 @@ export const Logo: React.FC<LogoProps> = ({
       {!collapsed && (
         <div className="flex flex-col min-w-0 justify-center">
           <div className="flex items-baseline leading-none">
-            {/* Tuzo - BOLD DARK / WHITE */}
+            {/* Tuzo - BOLD */}
             <span className={`font-black tracking-tight text-gray-900 dark:text-white ${textSizes[size]}`}>
               Tuzo
             </span>
-            {/* Hub - VIBRANT BRAND BLUE / CYAN (High contrast & crisp visibility) */}
-            <span className={`font-black tracking-tight text-brand-600 dark:text-cyan-400 ${textSizes[size]} ml-0.5`}>
+            {/* Hub - SLEEK LIGHT BUT SHARP & CLEAR (No opacity blur, high contrast legibility) */}
+            <span className={`font-light tracking-tight text-gray-600 dark:text-gray-300 ${textSizes[size]} ml-0.5`}>
               Hub
             </span>
           </div>
 
           {showSubtitle && (
-            <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 tracking-wide truncate mt-1 leading-tight uppercase">
+            <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400 tracking-wide truncate mt-1 leading-tight">
               {subtitleText || "Enterprise Loyalty Switch"}
             </span>
           )}
