@@ -72,6 +72,12 @@ export default function PlatformSettingsPage() {
     brandLogoUrl: "",
     smsSenderId: "",
 
+    // Tenant Legal & Consumer T&Cs
+    consumerTermsUrl: "",
+    consumerTermsSummary: "",
+    supportContactPhone: "",
+    supportContactEmail: "",
+
     // Credentials
     credentials: {} as Record<string, any>,
   });
@@ -120,6 +126,11 @@ export default function PlatformSettingsPage() {
             brandPrimaryColor: s.brandPrimaryColor || "#4f46e5",
             brandLogoUrl: s.brandLogoUrl || "",
             smsSenderId: s.smsSenderId || "",
+
+            consumerTermsUrl: s.consumerTermsUrl || "",
+            consumerTermsSummary: s.consumerTermsSummary || "",
+            supportContactPhone: s.supportContactPhone || "",
+            supportContactEmail: s.supportContactEmail || "",
 
             credentials: s.credentials || {},
           });
@@ -171,6 +182,11 @@ export default function PlatformSettingsPage() {
           brandPrimaryColor: formData.brandPrimaryColor,
           brandLogoUrl: formData.brandLogoUrl,
           smsSenderId: formData.smsSenderId,
+
+          consumerTermsUrl: formData.consumerTermsUrl,
+          consumerTermsSummary: formData.consumerTermsSummary,
+          supportContactPhone: formData.supportContactPhone,
+          supportContactEmail: formData.supportContactEmail,
 
           credentials: formData.credentials || {},
         }),
@@ -397,6 +413,44 @@ export default function PlatformSettingsPage() {
                   placeholder="https://..."
                 />
               </Field>
+            </div>
+          </LocalFormSection>
+
+          {/* ── Consumer Terms & Legal Disclosures ── */}
+          <LocalFormSection title="Legal & Consumer Terms & Conditions" description="Configure terms & disclosures displayed on USSD, SMS, and Web redemption landing pages">
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+              <Field label="Consumer Terms URL" hint="Direct link to your organization's official campaign T&C document">
+                <LocalTextInput
+                  value={formData.consumerTermsUrl}
+                  onChange={(e) => setFormData({ ...formData, consumerTermsUrl: e.target.value })}
+                  placeholder="e.g. https://gammacoatings.com/terms"
+                />
+              </Field>
+              <Field label="Customer Support Phone" hint="Displayed on consumer redemption receipts for customer queries">
+                <LocalTextInput
+                  value={formData.supportContactPhone}
+                  onChange={(e) => setFormData({ ...formData, supportContactPhone: e.target.value })}
+                  placeholder="e.g. +254700000000"
+                />
+              </Field>
+              <Field label="Customer Support Email">
+                <LocalTextInput
+                  value={formData.supportContactEmail}
+                  onChange={(e) => setFormData({ ...formData, supportContactEmail: e.target.value })}
+                  placeholder="e.g. support@gammacoatings.com"
+                />
+              </Field>
+              <div className="sm:col-span-2">
+                <Field label="USSD & SMS Legal Disclosure Summary" hint="Concise terms text displayed on USSD *483*55# option 5 or SMS footers">
+                  <textarea
+                    rows={2}
+                    value={formData.consumerTermsSummary}
+                    onChange={(e) => setFormData({ ...formData, consumerTermsSummary: e.target.value })}
+                    placeholder="e.g. Rewards by Gamma Coatings. Max 5 redemptions per painter/day. Valid for registered contractors over 18 yrs. T&C: gammacoatings.com/terms"
+                    className="w-full rounded-xl border border-gray-200 bg-gray-50/50 p-3 text-xs font-medium text-gray-900 shadow-2xs transition-colors placeholder:text-gray-400 focus:border-brand-500/40 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/30 dark:border-white/10 dark:bg-white/[0.03] dark:text-white dark:placeholder:text-white/30"
+                  />
+                </Field>
+              </div>
             </div>
           </LocalFormSection>
 
