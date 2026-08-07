@@ -74,10 +74,39 @@ export class UssdDispatcher {
       return "END Configuration error: Unable to resolve tenant for this shortcode.";
     }
 
-    const normalizedPhone = this.normalizePhone(params.phoneNumber);
-    const levels = params.text.split("*").filter(Boolean);
+    // --- USSD GATEWAY SANITIZATION ---
+    // Gateways sometimes send the serviceCode, subcode, or whitespace as the first input.
+    let rawText = params.text.trim();
+    
+    // 1. Strip exact service code if prepended (e.g., *617*85#*1 -> 1)
+    if (params.serviceCode && rawText.startsWith(params.serviceCode)) {
+      rawText = rawText.substring(params.serviceCode.length);
+    }
+    
+    // 2. Strip clean version of service code if prepended
+    const cleanServiceCode = params.serviceCode ? params.serviceCode.replace(/[^0-9*]/g, "") : "";
+    if (cleanServiceCode && rawText.startsWith(cleanServiceCode)) {
+      rawText = rawText.substring(cleanServiceCode.length);
+    }
 
-    // 4. Fetch Consumer, Tenant, and Tenant Settings
+    // 3. Remove leading asterisks left over from stripping
+    if (rawText.startsWith("*")) {
+      rawText = rawText.substring(1);
+    }
+    
+    // 4. Strip sub-code if passed purely as text (e.g. text="85", serviceCode="*617*85#")
+    if (params.serviceCode && rawText.length > 0) {
+      const parts = params.serviceCode.replace(/[^0-9*]/g, "").split("*").filter(Boolean);
+      const subcode = parts[parts.length - 1]; // e.g., "85"
+      if (rawText === subcode) {
+        rawText = "";
+      }
+    }
+
+    const normalizedPhone = this.normalizePhone(params.phoneNumber);
+    const levels = rawText.split("*").filter(Boolean);
+
+    // 5. Fetch Consumer, Tenant, and Tenant Settings
     const [consumer, tenantRecord, tSettingsRecord] = await Promise.all([
       this.findConsumer(normalizedPhone, resolvedTenantId),
       db.select().from(tenants).where(eq(tenants.id, resolvedTenantId)).limit(1).then(r => r[0]),
