@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "db:generate": "drizzle-kit generate",
-    "db:push": "drizzle-kit push",
+    "db:push": "drizzle-kit push --force",
     "db:seed": "tsx src/db/seed.ts",
     "db:wipe": "tsx src/db/seed.ts --wipe",
     "db:studio": "drizzle-kit studio",

@@ -11,7 +11,7 @@ import { IUssdHandler, UssdRequestParams, UssdRequestContext } from "./ussd.inte
 export class GammaUssdService implements IUssdHandler {
   async processRequest(params: UssdRequestParams, context: UssdRequestContext): Promise<string> {
     const { text, phoneNumber } = params;
-    const { tenantId, normalizedPhone, levels, consumer, tenantRecord } = context;
+    const { tenantId, normalizedPhone, levels, consumer, tenantRecord, tSettingsRecord } = context;
 
     // Check if they are in a registration session (stateless level tracking)
     const isRegistrationSession = !consumer || !consumer.isRegistered || levels.length > 2;
@@ -19,8 +19,10 @@ export class GammaUssdService implements IUssdHandler {
     // ── UNREGISTERED USER FLOW (Scenarios A & B) ───────────────────
     if (isRegistrationSession) {
       if (text === "") {
+        const creds = (tSettingsRecord?.credentials || {}) as any;
+        const customGreeting = creds.ussdGreeting || "Welcome to Gamma Rangi na Chapaa!";
         return [
-          "CON Welcome to Gamma Rangi na Chapaa!",
+          `CON ${customGreeting}`,
           "1. English",
           "2. Kiswahili",
         ].join("\n");

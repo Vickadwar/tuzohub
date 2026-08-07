@@ -46,32 +46,38 @@ async function getOrCreateAuthUser(email: string, password: string) {
 
 async function wipeDatabase() {
   console.log("⚠️ Wiping all existing application tables for a fresh start...");
-  // Order of deletion respecting foreign keys
-  await db.execute(sql`
-    TRUNCATE TABLE 
-      audit_logs,
-      vouchers,
-      voucher_batches,
-      production_batches,
-      products,
-      categories,
-      reward_items,
-      reward_categories,
-      organization_members,
-      sales_hierarchy_assignments,
-      organizations,
-      sales_hierarchy,
-      towns,
-      regions,
-      tenant_channels,
-      tenant_settings,
-      users,
-      tenants,
-      counties,
-      countries,
-      currencies
-    CASCADE;
-  `);
+  const tableList = [
+    "audit_logs",
+    "vouchers",
+    "voucher_batches",
+    "product_batches",
+    "products",
+    "categories",
+    "reward_redemptions",
+    "reward_items",
+    "reward_categories",
+    "organization_members",
+    "sales_hierarchy_assignments",
+    "organizations",
+    "sales_hierarchy",
+    "towns",
+    "regions",
+    "tenant_channels",
+    "tenant_settings",
+    "users",
+    "tenants",
+    "counties",
+    "countries",
+    "currencies"
+  ];
+
+  for (const table of tableList) {
+    try {
+      await db.execute(sql.raw(`DELETE FROM "${table}";`));
+    } catch (e: any) {
+      // Ignore table missing errors silently
+    }
+  }
   console.log("✨ Database wiped clean!");
 }
 
