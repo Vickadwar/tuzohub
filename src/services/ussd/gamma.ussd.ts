@@ -290,10 +290,11 @@ export class GammaUssdService implements IUssdHandler {
       serviceID: creds.bongaServiceId || creds.bongaServiceID || creds.serviceID || creds.oliveServiceId || "1",
     };
 
+    const shortcode = (tSettingsRecord as any)?.primaryShortcode || creds?.ussdServiceCode || "*617*85#";
     const isSwahili = language === "sw";
     const welcomeMsg = isSwahili
-      ? `Karibu kwenye Gamma Rangi na Chapaa, ${fullName}! Akaunti yako imefunguliwa. Piga *617*85# wakati wowote kuweka vocha.`
-      : `Welcome to Gamma Rangi na Chapaa, ${fullName}! Your account is active. Dial *617*85# anytime to redeem vouchers.`;
+      ? `Karibu kwenye Gamma Rangi na Chapaa, ${fullName}! Akaunti yako imefunguliwa. Piga ${shortcode} wakati wowote kuweka vocha.`
+      : `Welcome to Gamma Rangi na Chapaa, ${fullName}! Your account is active. Dial ${shortcode} anytime to redeem vouchers.`;
 
     const termsMsg = isSwahili
       ? `Tazama Vigezo na Masharti ya Mpango wa Gamma hapa: ${termsUrl}`
@@ -326,6 +327,7 @@ export class GammaUssdService implements IUssdHandler {
 
     const creds = (tSettingsRecord?.credentials || {}) as any;
     const termsUrl = (tSettingsRecord as any)?.termsUrl || (creds as any)?.termsUrl || "https://tuzohub.com/terms";
+    const shortcode = (tSettingsRecord as any)?.primaryShortcode || creds?.ussdServiceCode || "*617*85#";
     const autoDisburse = creds.autoDisburse !== false && creds.allowInstantRedemption !== false;
 
     // Resolve SMS configuration
@@ -363,8 +365,8 @@ export class GammaUssdService implements IUssdHandler {
       if (!voucherRow || voucherRow.tenantId !== tenantId) {
         // INVALID VOUCHER
         const msg = isSwahili
-          ? `Pole, vocha nambari ${enteredCode} haipo au sio sahihi. Tafadhali hakiki na upige *617*85# kujaribu tena.`
-          : `Pole, the voucher code ${enteredCode} is invalid or not found. Please check the number and dial *617*85# to try again.`;
+          ? `Pole, vocha nambari ${enteredCode} haipo au sio sahihi. Tafadhali hakiki na upige ${shortcode} kujaribu tena.`
+          : `Pole, the voucher code ${enteredCode} is invalid or not found. Please check the number and dial ${shortcode} to try again.`;
         await SmsService.sendSms({ config: smsConfig, to: phoneNumber, message: msg });
         return;
       }
