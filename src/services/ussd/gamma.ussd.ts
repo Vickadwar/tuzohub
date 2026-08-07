@@ -16,6 +16,13 @@ export class GammaUssdService implements IUssdHandler {
     // Check if they are in a registration session (stateless level tracking)
     const isRegistrationSession = !consumer || !consumer.isRegistered || levels.length > 2;
 
+    // --- AGGRESSIVE GATEWAY JUNK FILTER ---
+    // If Safaricom sends garbage on the first ping (e.g. "85#" or "*617*85#") instead of a clean empty string,
+    // we silently delete the junk so the rest of the flow treats it as a brand new session.
+    if (levels.length > 0 && !["0", "1", "2"].includes(levels[0])) {
+      levels.shift();
+    }
+
     // ── UNREGISTERED USER FLOW (Scenarios A & B) ───────────────────
     if (isRegistrationSession) {
       if (levels.length === 0) {
@@ -29,9 +36,6 @@ export class GammaUssdService implements IUssdHandler {
       }
 
       const langChoice = levels[0];
-      if (langChoice !== "1" && langChoice !== "2") {
-        return "END Invalid choice. Select 1 or 2.";
-      }
       const isSwahili = langChoice === "2";
 
       if (levels.length === 1) {
