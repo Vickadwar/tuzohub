@@ -105,6 +105,13 @@ export class GammaUssdService implements IUssdHandler {
           return isSwahili ? "END Lazima ukubali Vigezo na Masharti ili kusajiliwa." : "END You must accept the Terms & Conditions to register.";
         }
 
+        return isSwahili
+          ? "CON Karibu kusajiliwa kikamilifu! Weka nambari ya Vocha, au bonyeza 0 kuruka kwa sasa:"
+          : "CON Almost done! Enter your Gamma Voucher Number, or press 0 to skip for now:";
+      }
+
+      if (levels.length === currentLevelIdx + 2) {
+        const enteredCode = levels[currentLevelIdx + 1]?.trim();
         const fullName = levels[1];
         const idNumber = levels[2];
         const townIdx = (parseInt(townSelectionLevel) || 1) - 1 + pageOffset;
@@ -113,7 +120,7 @@ export class GammaUssdService implements IUssdHandler {
         const parts = fullName.trim().split(/\s+/);
         const firstName = parts[0] || "Gamma";
         const lastName = parts.slice(1).join(" ") || "User";
-        const language = isSwahili ? "sw" : "en";
+        const lang = isSwahili ? "sw" : "en";
 
         let newConsumerId = consumer?.id;
 
@@ -124,7 +131,7 @@ export class GammaUssdService implements IUssdHandler {
               lastName,
               idNumber,
               townId: selectedTown?.id || null,
-              preferredLanguage: language,
+              preferredLanguage: lang,
               isRegistered: true,
               updatedAt: new Date(),
             }).where(eq(consumers.id, consumer.id));
@@ -139,7 +146,7 @@ export class GammaUssdService implements IUssdHandler {
               lastName,
               idNumber,
               townId: selectedTown?.id || null,
-              preferredLanguage: language,
+              preferredLanguage: lang,
               isRegistered: true,
               status: "active",
             });
@@ -156,21 +163,7 @@ export class GammaUssdService implements IUssdHandler {
           }
         });
 
-        return isSwahili
-          ? "CON Umesajiliwa kikamilifu! Weka nambari ya Vocha, au bonyeza 0 kuruka kwa sasa:"
-          : "CON Registration successful! Enter your Gamma Voucher Number, or press 0 to skip for now:";
-      }
-
-      if (levels.length === currentLevelIdx + 2) {
-        const enteredCode = levels[currentLevelIdx + 1]?.trim();
-        const fullName = levels[1];
-        const parts = fullName.trim().split(/\s+/);
-        const firstName = parts[0] || "Gamma";
-        const lastName = parts.slice(1).join(" ") || "User";
-        const lang = isSwahili ? "sw" : "en";
-
         // Trigger onboarding SMS (Welcome + T&C link)
-        // Await the SMS so Vercel serverless doesn't aggressively kill the background task
         await this.sendOnboardingSms({
           tenantId,
           phoneNumber,
@@ -185,20 +178,17 @@ export class GammaUssdService implements IUssdHandler {
             : `END Welcome ${firstName}! Your registration is complete. You will receive an SMS with your account details & Terms & Conditions link shortly.`;
         }
 
-        // Trigger voucher processing
-        // Await this to ensure Vercel doesn't kill the lambda
-        await this.verifyVoucherAndSendSms({
+        // Trigger voucher processing synchronously
+        const resultMsg = await this.verifyVoucherAndSendSms({
           tenantId,
-          consumerId: consumer?.id || "",
+          consumerId: newConsumerId || "",
           enteredCode,
           phoneNumber,
           language: lang,
           fullName: `${firstName} ${lastName}`.trim(),
-        }).catch(err => console.error("Error in background voucher processing", err));
+        });
 
-        return isSwahili
-          ? "END Asante! Vocha yako inashughulikiwa. Utapokea SMS hivi punde kuthibitisha malipo yako."
-          : "END Thank you! Your voucher is being verified. You will receive an SMS with your top-up status shortly.";
+        return "END " + resultMsg;
       }
 
       return isSwahili ? "END Chaguo lisilo sahihi." : "END Invalid option.";
