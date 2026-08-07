@@ -101,7 +101,7 @@ export class GammaUssdService implements IUssdHandler {
       }
 
       if (levels.length === currentLevelIdx + 1) {
-        if (levels[currentLevelIdx - 1] !== "1") {
+        if (levels[currentLevelIdx] !== "1") {
           return isSwahili ? "END Lazima ukubali Vigezo na Masharti ili kusajiliwa." : "END You must accept the Terms & Conditions to register.";
         }
 
