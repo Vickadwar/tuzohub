@@ -273,16 +273,7 @@ export class GammaUssdService implements IUssdHandler {
     const creds = (tSettingsRecord?.credentials || {}) as any;
     const termsUrl = (tSettingsRecord as any)?.termsUrl || (creds as any)?.termsUrl || "https://tuzohub.vercel.app/terms";
 
-    const smsConfig = {
-      provider: creds.smsProvider,
-      username: creds.atUsername,
-      apiKey: creds.atApiKey,
-      senderId: creds.atSenderId || creds.bongaSenderId || creds.senderId,
-      apiClientID: creds.bongaClientId || creds.bongaApiClientID || creds.apiClientID || creds.oliveClientId || creds.clientId,
-      key: creds.bongaApiKey || creds.key || creds.oliveApiKey || creds.apiKey,
-      secret: creds.bongaApiSecret || creds.secret || creds.oliveApiSecret || creds.apiSecret,
-      serviceID: creds.bongaServiceId || creds.bongaServiceID || creds.serviceID || creds.oliveServiceId || creds.serviceId || "1",
-    };
+    const smsConfig = creds;
 
     const shortcode = (tSettingsRecord as any)?.primaryShortcode || creds?.ussdServiceCode || "*617*85#";
     const isSwahili = language === "sw";
@@ -325,16 +316,7 @@ export class GammaUssdService implements IUssdHandler {
     const autoDisburse = creds.autoDisburse !== false && creds.allowInstantRedemption !== false;
 
     // Resolve SMS configuration
-    const smsConfig = {
-      provider: creds.smsProvider,
-      username: creds.atUsername,
-      apiKey: creds.atApiKey,
-      senderId: creds.atSenderId || creds.bongaSenderId,
-      apiClientID: creds.bongaClientId || creds.bongaApiClientID || creds.apiClientID || creds.oliveClientId,
-      key: creds.bongaApiKey || creds.key || creds.oliveApiKey,
-      secret: creds.bongaApiSecret || creds.secret || creds.oliveApiSecret,
-      serviceID: creds.bongaServiceId || creds.bongaServiceID || creds.serviceID || creds.oliveServiceId || "1",
-    };
+    const smsConfig = creds;
 
     const codeHash = crypto.createHash("sha256").update(enteredCode).digest("hex");
 
@@ -362,7 +344,7 @@ export class GammaUssdService implements IUssdHandler {
           ? `Pole, vocha nambari ${enteredCode} haipo au sio sahihi. Tafadhali hakiki na upige ${shortcode} kujaribu tena.`
           : `Pole, the voucher code ${enteredCode} is invalid or not found. Please check the number and dial ${shortcode} to try again.`;
         await SmsService.sendSms({ config: smsConfig, to: phoneNumber, message: msg });
-        return isSwahili ? "Vocha sio sahihi au haijapatikana, tafadhali jaribu tena." : "Invalid or not found, please try again.";
+        return isSwahili ? "Nambari ya Vocha uliyoingiza sio sahihi au haijapatikana, tafadhali jaribu tena." : "The Voucher Code Entered is invalid or not Found, please try again.";
       }
 
       const vStatus = voucherRow.status as string;
