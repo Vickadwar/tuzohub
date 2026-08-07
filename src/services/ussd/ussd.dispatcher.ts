@@ -63,8 +63,12 @@ export class UssdDispatcher {
         .then(r => r[0])
         .catch(() => null);
       
+      const alternativeGamma = await db.select().from(tenants).where(eq(tenants.slug, "gamma")).limit(1).then(r => r[0]).catch(() => null);
+
       if (fallbackTenant) {
         resolvedTenantId = fallbackTenant.id;
+      } else if (alternativeGamma) {
+        resolvedTenantId = alternativeGamma.id;
       } else {
         const firstTenant = await db.select().from(tenants).limit(1).then(r => r[0]).catch(() => null);
         if (firstTenant) {
@@ -105,7 +109,7 @@ export class UssdDispatcher {
     const slug = (tenantRecord?.slug || "").toLowerCase();
     
     let handler: IUssdHandler;
-    if (strategy === "GAMMA_COATINGS" || strategy === "GAMMA" || slug === "gamma-coatings") {
+    if (strategy === "GAMMA_COATINGS" || strategy === "GAMMA" || slug === "gamma-coatings" || slug === "gamma") {
       handler = new GammaUssdService();
     } else if (this.HANDLERS[strategy]) {
       handler = this.HANDLERS[strategy];
