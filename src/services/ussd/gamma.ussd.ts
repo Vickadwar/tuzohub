@@ -170,7 +170,8 @@ export class GammaUssdService implements IUssdHandler {
         const lang = isSwahili ? "sw" : "en";
 
         // Trigger onboarding SMS (Welcome + T&C link)
-        this.sendOnboardingSms({
+        // Await the SMS so Vercel serverless doesn't aggressively kill the background task
+        await this.sendOnboardingSms({
           tenantId,
           phoneNumber,
           language: lang,
@@ -184,8 +185,9 @@ export class GammaUssdService implements IUssdHandler {
             : `END Welcome ${firstName}! Your registration is complete. You will receive an SMS with your account details & Terms & Conditions link shortly.`;
         }
 
-        // Trigger background voucher processing
-        this.verifyVoucherAndSendSms({
+        // Trigger voucher processing
+        // Await this to ensure Vercel doesn't kill the lambda
+        await this.verifyVoucherAndSendSms({
           tenantId,
           consumerId: consumer?.id || "",
           enteredCode,
@@ -281,7 +283,7 @@ export class GammaUssdService implements IUssdHandler {
     ]);
 
     const creds = (tSettingsRecord?.credentials || {}) as any;
-    const termsUrl = (tSettingsRecord as any)?.termsUrl || (creds as any)?.termsUrl || "https://tuzohub.com/terms";
+    const termsUrl = (tSettingsRecord as any)?.termsUrl || (creds as any)?.termsUrl || "https://tuzohub.vercel.app/terms";
 
     const smsConfig = {
       provider: creds.smsProvider,
@@ -330,7 +332,7 @@ export class GammaUssdService implements IUssdHandler {
     ]);
 
     const creds = (tSettingsRecord?.credentials || {}) as any;
-    const termsUrl = (tSettingsRecord as any)?.termsUrl || (creds as any)?.termsUrl || "https://tuzohub.com/terms";
+    const termsUrl = (tSettingsRecord as any)?.termsUrl || (creds as any)?.termsUrl || "https://tuzohub.vercel.app/terms";
     const shortcode = (tSettingsRecord as any)?.primaryShortcode || creds?.ussdServiceCode || "*617*85#";
     const autoDisburse = creds.autoDisburse !== false && creds.allowInstantRedemption !== false;
 
