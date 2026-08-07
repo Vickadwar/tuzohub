@@ -14,7 +14,7 @@ export class GammaUssdService implements IUssdHandler {
     const { tenantId, normalizedPhone, levels, consumer, tenantRecord, tSettingsRecord } = context;
 
     // Check if they are in a registration session (stateless level tracking)
-    const isRegistrationSession = !consumer || !consumer.isRegistered || levels.length > 2;
+    const isRegistrationSession = !consumer || !consumer.isRegistered;
 
     // --- AGGRESSIVE GATEWAY JUNK FILTER ---
     // If Safaricom sends garbage on the first ping (e.g. "85#" or "*617*85#") instead of a clean empty string,
@@ -244,19 +244,17 @@ export class GammaUssdService implements IUssdHandler {
           return isConsumerSwahili ? "END Nambari ya vocha inahitajika." : "END Voucher code is required.";
         }
 
-        // Trigger background verification & SMS
-        this.verifyVoucherAndSendSms({
+        // Trigger background verification & SMS synchronously
+        const resultMsg = await this.verifyVoucherAndSendSms({
           tenantId,
           consumerId: consumer.id,
           enteredCode,
           phoneNumber,
           language: consumerLang,
           fullName: `${consumer.firstName} ${consumer.lastName}`.trim(),
-        }).catch(err => console.error("Error in background returning voucher processing", err));
+        });
 
-        return isConsumerSwahili
-          ? "END Asante! Vocha yako inashughulikiwa. Utapokea SMS hivi punde kuthibitisha."
-          : "END Thank you! Your voucher is being verified. You will receive an SMS confirmation shortly.";
+        return "END " + resultMsg;
       }
     }
 
@@ -289,11 +287,11 @@ export class GammaUssdService implements IUssdHandler {
       provider: creds.smsProvider,
       username: creds.atUsername,
       apiKey: creds.atApiKey,
-      senderId: creds.atSenderId || creds.bongaSenderId,
-      apiClientID: creds.bongaClientId || creds.bongaApiClientID || creds.apiClientID || creds.oliveClientId,
-      key: creds.bongaApiKey || creds.key || creds.oliveApiKey,
-      secret: creds.bongaApiSecret || creds.secret || creds.oliveApiSecret,
-      serviceID: creds.bongaServiceId || creds.bongaServiceID || creds.serviceID || creds.oliveServiceId || "1",
+      senderId: creds.atSenderId || creds.bongaSenderId || creds.senderId,
+      apiClientID: creds.bongaClientId || creds.bongaApiClientID || creds.apiClientID || creds.oliveClientId || creds.clientId,
+      key: creds.bongaApiKey || creds.key || creds.oliveApiKey || creds.apiKey,
+      secret: creds.bongaApiSecret || creds.secret || creds.oliveApiSecret || creds.apiSecret,
+      serviceID: creds.bongaServiceId || creds.bongaServiceID || creds.serviceID || creds.oliveServiceId || creds.serviceId || "1",
     };
 
     const shortcode = (tSettingsRecord as any)?.primaryShortcode || creds?.ussdServiceCode || "*617*85#";
@@ -321,7 +319,7 @@ export class GammaUssdService implements IUssdHandler {
     phoneNumber: string;
     language: string;
     fullName: string;
-  }) {
+  }): Promise<string> {
     const { tenantId, consumerId, enteredCode, phoneNumber, language, fullName } = params;
     const isSwahili = language === "sw";
 
@@ -374,7 +372,7 @@ export class GammaUssdService implements IUssdHandler {
           ? `Pole, vocha nambari ${enteredCode} haipo au sio sahihi. Tafadhali hakiki na upige ${shortcode} kujaribu tena.`
           : `Pole, the voucher code ${enteredCode} is invalid or not found. Please check the number and dial ${shortcode} to try again.`;
         await SmsService.sendSms({ config: smsConfig, to: phoneNumber, message: msg });
-        return;
+        return isSwahili ? "Vocha sio sahihi au haijapatikana, tafadhali jaribu tena." : "Invalid or not found, please try again.";
       }
 
       const vStatus = voucherRow.status as string;
@@ -386,7 +384,7 @@ export class GammaUssdService implements IUssdHandler {
           ? `Pole, vocha nambari ${enteredCode} tayari ilishatumiwa${dateStr ? ` tarehe ${dateStr}` : ""}. Tafadhali tumia vocha nyingine halali ya Gamma.`
           : `Pole, the voucher code ${enteredCode} has already been used${dateStr ? ` on ${dateStr}` : ""}. Please try another valid Gamma voucher.`;
         await SmsService.sendSms({ config: smsConfig, to: phoneNumber, message: msg });
-        return;
+        return isSwahili ? "Vocha tayari ishatumika." : "Voucher already used.";
       }
 
       if (vStatus === "PENDING") {
@@ -395,7 +393,7 @@ export class GammaUssdService implements IUssdHandler {
           ? `Hujambo ${fullName}, vocha yako ${enteredCode} tayari ipo kwenye foleni ya kushughulikiwa. Utapokea malipo yako hivi punde.`
           : `Dear ${fullName}, your voucher code ${enteredCode} is already in queue pending processing. Your wallet will be topped up shortly once confirmed.`;
         await SmsService.sendSms({ config: smsConfig, to: phoneNumber, message: msg });
-        return;
+        return isSwahili ? "Vocha tayari ipo kwenye foleni. Pesa itaingia hivi punde." : "Voucher already in queue. Topping up shortly.";
       }
 
       if (vStatus !== "ACTIVE") {
@@ -403,7 +401,7 @@ export class GammaUssdService implements IUssdHandler {
           ? `Pole, vocha nambari ${enteredCode} haijawashwa. Hali: ${vStatus}.`
           : `Pole, the voucher code ${enteredCode} is not active. Status: ${vStatus}.`;
         await SmsService.sendSms({ config: smsConfig, to: phoneNumber, message: msg });
-        return;
+        return isSwahili ? `Vocha haijawashwa. Hali: ${vStatus}.` : `Voucher is not active. Status: ${vStatus}.`;
       }
 
       // Calculate Cash Amount directly from points / rate
@@ -421,7 +419,9 @@ export class GammaUssdService implements IUssdHandler {
           ? `Hujambo ${fullName}, vocha yako ${enteredCode} imepokewa na ipo kwenye foleni ya kushughulikiwa. Malipo yako yatatumwa hivi punde. Vigezo: ${termsUrl}`
           : `Dear ${fullName}, your voucher ${enteredCode} has been received and queued for processing. Your wallet will be topped up shortly. T&Cs: ${termsUrl}`;
         await SmsService.sendSms({ config: smsConfig, to: phoneNumber, message: msg });
-        return;
+        return isSwahili 
+          ? "Vocha yako imepokewa na ipo kwenye foleni. Akaunti yako itaongezewa pesa hivi punde." 
+          : "Your Voucher has been received and queued. Your account will be topped up shortly.";
       }
 
       // Execute Instant M-Pesa B2C Cashout Payout
@@ -453,6 +453,10 @@ export class GammaUssdService implements IUssdHandler {
           : `Hongera ${fullName}! Voucher code ${enteredCode} is valid. Ksh ${cashAmount} has been sent to your mobile wallet. Thank you for choosing Gamma Coatings. T&Cs: ${termsUrl}`;
         await SmsService.sendSms({ config: smsConfig, to: phoneNumber, message: msg });
 
+        return isSwahili 
+          ? "Vocha yako imekubaliwa na akaunti yako itaongezewa pesa hivi punde." 
+          : "Your Voucher has been accepted and your account will be topped up shortly.";
+
       } catch (payoutErr: any) {
         console.error("Instant payout execution queued", payoutErr);
         // Mark as PENDING in queue if payout gateway delays
@@ -462,6 +466,9 @@ export class GammaUssdService implements IUssdHandler {
           ? `Hujambo ${fullName}, vocha yako ${enteredCode} imepokewa na ipo kwenye foleni. Pesa zitatumwa kwa M-Pesa yako hivi punde.`
           : `Dear ${fullName}, your voucher ${enteredCode} has been received and queued. Your wallet will be topped up shortly once confirmed.`;
         await SmsService.sendSms({ config: smsConfig, to: phoneNumber, message: msg });
+        return isSwahili 
+          ? "Vocha yako imepokewa na ipo kwenye foleni. Pesa itaingia hivi punde." 
+          : "Your voucher has been queued. Wallet will be topped up shortly.";
       }
 
     } catch (err: any) {
@@ -470,6 +477,7 @@ export class GammaUssdService implements IUssdHandler {
         ? `Hujambo ${fullName}, imetokea hitilafu wakati wa kuhakiki vocha yako ${enteredCode}. Tafadhali jaribu tena baadaye.`
         : `Dear ${fullName}, an error occurred while verifying your voucher ${enteredCode}. Please try again later.`;
       await SmsService.sendSms({ config: smsConfig, to: phoneNumber, message: msg }).catch(e => console.error("Error sending error SMS", e));
+      return isSwahili ? "Kuna hitilafu kushughulikia vocha. Wasiliana na mhudumu." : "Error processing voucher. Please contact support.";
     }
   }
 }
