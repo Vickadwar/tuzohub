@@ -18,7 +18,7 @@ export class GammaUssdService implements IUssdHandler {
 
     // ── UNREGISTERED USER FLOW (Scenarios A & B) ───────────────────
     if (isRegistrationSession) {
-      if (text === "") {
+      if (levels.length === 0) {
         const creds = (tSettingsRecord?.credentials || {}) as any;
         const customGreeting = creds.ussdGreeting || "Welcome to Gamma Rangi na Chapaa!";
         return [
@@ -209,7 +209,7 @@ export class GammaUssdService implements IUssdHandler {
         : "END Account Notice: Cashout privileges are currently locked for your mobile number. Please contact customer support (+254 756 509 898).";
     }
 
-    if (text === "") {
+    if (levels.length === 0) {
       return isConsumerSwahili
         ? [
             `CON Karibu tena, ${consumer.firstName || "mteja"}!`,
