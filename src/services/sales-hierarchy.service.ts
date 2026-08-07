@@ -79,5 +79,13 @@ export class SalesHierarchyService {
       )
     );
   }
+
+  static async deleteStaff(id: string, tenantId: string, tx: any = db) {
+    const result = await tx.delete(salesHierarchy)
+      .where(and(eq(salesHierarchy.id, id), eq(salesHierarchy.tenantId, tenantId)))
+      .returning();
+    if (result.length === 0) throw new Error("Staff member not found or already deleted");
+    return result[0];
+  }
 }
 

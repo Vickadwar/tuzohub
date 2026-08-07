@@ -184,7 +184,7 @@ export default function CampaignsList() {
               <TableHeader>
                 <TableRow className="bg-gray-50/50 dark:bg-white/[0.01]">
                   <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400">Campaign Blueprint &amp; Identity</TableCell>
-                  <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400">Fulfillment Model</TableCell>
+                  <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400">Reward Fulfillment Mode</TableCell>
                   <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400">Reward Value</TableCell>
                   <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400">Multiplier</TableCell>
                   <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400">Status</TableCell>

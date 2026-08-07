@@ -5,8 +5,16 @@ import Badge from "../ui/badge/Badge";
 import { ArrowUpIcon, GroupIcon, BoxIconLine } from "@/icons";
 import { useApi } from "@/hooks/useApi";
 
-export default function OverviewMetrics() {
-  const { data: stats, isLoading, isError } = useApi("/loyalty/stats/overview");
+interface OverviewMetricsProps {
+  stats?: any;
+  isLoading?: boolean;
+}
+
+export default function OverviewMetrics({ stats: propStats, isLoading: propIsLoading }: OverviewMetricsProps = {}) {
+  const { data: apiStats, isLoading: apiIsLoading, isError } = useApi(propStats ? null : "/loyalty/stats/overview");
+
+  const stats = propStats || apiStats;
+  const isLoading = propIsLoading !== undefined ? propIsLoading : apiIsLoading;
 
   const formatNumber = (num: number | string) => {
     const value = typeof num === "string" ? parseFloat(num) : num;

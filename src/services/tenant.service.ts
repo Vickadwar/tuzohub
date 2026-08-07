@@ -32,10 +32,31 @@ export class TenantService {
       if (countryRecords.length > 0) countryName = countryRecords[0].name;
     }
 
-    const settingsRecords = await tx.select().from(tenantSettings).where(eq(tenantSettings.tenantId, tenant.id)).limit(1);
-    const settings = settingsRecords.length > 0 ? settingsRecords[0] : null;
+    // Fetch currency symbol for display
+    let currencySymbol = null;
+    if (tenant.baseCurrency) {
+      const currencyRecords = await tx.select().from(currencies).where(eq(currencies.code, tenant.baseCurrency)).limit(1);
+      if (currencyRecords.length > 0) currencySymbol = currencyRecords[0].symbol;
+    }
 
-    return { ...tenant, countryName, settings };
+    const settingsRecords = await tx.select().from(tenantSettings).where(eq(tenantSettings.tenantId, tenant.id)).limit(1);
+    const settings = settingsRecords.length > 0 ? settingsRecords[0] : {
+      defaultRewardMode: "POINTS",
+      rewardUnitLabel: "PTS",
+      defaultCanPurchase: true,
+      defaultCanEarnPoints: true,
+      defaultCanRedeemPoints: true,
+      defaultCanBankPoints: true,
+      defaultCanTransferPoints: false,
+      maxFailedRedemptionsPerHour: 5,
+      requireMfaForRedemption: false,
+      redemptionVelocityCheckMinutes: 60,
+      maxPointsEarnedPerDay: "1000",
+      brandPrimaryColor: "#4f46e5",
+      brandLogoUrl: "",
+    };
+
+    return { ...tenant, countryName, currencySymbol, settings };
   }
 
   static async getCountries(tx: any = db) {

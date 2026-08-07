@@ -177,8 +177,8 @@ export const tenants = pgTable("tenants", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (t) => ({
   emailCheck: check("email_check", sql`email IS NULL OR email ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$'`),
-  phoneCheck: check("phone_check", sql`phone IS NULL OR phone ~ '^[0-9]{9,15}$'`),
-  statusCheck: check("status_check", sql`status IN ('active', 'suspended', 'pending', 'declined')`),
+  phoneCheck: check("phone_check", sql`phone IS NULL OR phone ~ '^[+0-9]{9,16}$'`),
+  statusCheck: check("status_check", sql`status IN ('active', 'suspended', 'pending', 'declined', 'inactive')`),
   planCheck: check("plan_check", sql`plan IN ('basic', 'professional', 'enterprise')`),
   policies: [
     pgPolicy("tenant_isolation", {
@@ -195,6 +195,10 @@ export const tenants = pgTable("tenants", {
 export const tenantSettings = pgTable("tenant_settings", {
   id: uuid("id").defaultRandom().primaryKey(),
   tenantId: uuid("tenant_id").references(() => tenants.id).notNull().unique(),
+
+  // Promotional & Reward Model Defaults
+  defaultRewardMode: varchar("default_reward_mode", { length: 50 }).default("POINTS"),
+  rewardUnitLabel: varchar("reward_unit_label", { length: 20 }).default("PTS"),
 
   // Redemption global settings
   redemptionRequiresApproval: boolean("redemption_requires_approval").default(false).notNull(),
@@ -220,6 +224,7 @@ export const tenantSettings = pgTable("tenant_settings", {
   // Fraud & security
   maxFailedRedemptionsPerHour: integer("max_failed_redemptions_per_hour").default(5),
   requireMfaForRedemption: boolean("require_mfa_for_redemption").default(false),
+  mfaHighValueThreshold: numeric("mfa_high_value_threshold", { precision: 14, scale: 2 }).default("5000"),
   redemptionVelocityCheckMinutes: integer("redemption_velocity_check_minutes").default(60),
   maxPointsEarnedPerDay: numeric("max_points_earned_per_day", { precision: 14, scale: 2 }),
 
@@ -228,6 +233,12 @@ export const tenantSettings = pgTable("tenant_settings", {
   brandLogoUrl: varchar("brand_logo_url", { length: 512 }),
   smsSenderId: varchar("sms_sender_id", { length: 20 }),
   emailFooterHtml: text("email_footer_html"),
+
+  // Consumer Legal & Support Contacts
+  consumerTermsUrl: varchar("consumer_terms_url", { length: 512 }),
+  consumerTermsSummary: text("consumer_terms_summary"),
+  supportContactPhone: varchar("support_contact_phone", { length: 50 }),
+  supportContactEmail: varchar("support_contact_email", { length: 255 }),
 
   // Webhooks & integrations (global settings)
   globalWebhookRetryCount: integer("global_webhook_retry_count").default(3),
@@ -239,6 +250,13 @@ export const tenantSettings = pgTable("tenant_settings", {
 
   // External Credentials (AT, Daraja, etc.)
   credentials: jsonb("credentials").default({}),
+
+  // Super Admin Telco & USSD Strategy Governance
+  ussdHandlerStrategy: varchar("ussd_handler_strategy", { length: 50 }).default("DEFAULT"),
+  primaryShortcode: varchar("primary_shortcode", { length: 50 }),
+  sharedSubPrefix: varchar("shared_sub_prefix", { length: 50 }),
+  isDedicatedShortcode: boolean("is_dedicated_shortcode").default(false),
+  ussdConfig: jsonb("ussd_config").default({}),
 
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
@@ -753,6 +771,9 @@ export const campaigns = pgTable("campaigns", {
   name: varchar("name", { length: 255 }).notNull(),
   description: text("description"),
   campaignType: varchar("campaign_type", { length: 50 }).notNull(),
+  fulfillmentMode: varchar("fulfillment_mode", { length: 50 }).default("ACCUMULATION").notNull(),
+  instantRewardType: varchar("instant_reward_type", { length: 50 }),
+  instantValue: numeric("instant_value", { precision: 12, scale: 2 }),
   pointConversionOverride: numeric("point_conversion_override", { precision: 10, scale: 4 }),
   pointsMultiplier: numeric("points_multiplier", { precision: 5, scale: 2 }).default("1.0"),
   startDate: timestamp("start_date", { withTimezone: true }).notNull(),
@@ -1082,6 +1103,7 @@ export const voucherBatches = pgTable("voucher_batches", {
 export const vouchers = pgTable("vouchers", {
   id: uuid("id").defaultRandom().primaryKey(),
   batchId: uuid("batch_id").references(() => voucherBatches.id, { onDelete: "cascade" }),
+  productBatchId: uuid("product_batch_id").references(() => productBatches.id),
   serialNumber: varchar("serial_number", { length: 100 }).unique().notNull(),
   secureCodeHash: text("secure_code_hash").notNull(),
   status: voucherStatusEnum("status").default("PRINTED").notNull(),
@@ -1093,6 +1115,7 @@ export const vouchers = pgTable("vouchers", {
 }, (t) => ({
   idx_serial: index("idx_voucher_serial").on(t.serialNumber),
   idx_dealer: index("idx_voucher_dealer").on(t.currentDealerId),
+  idx_product_batch: index("idx_voucher_product_batch").on(t.productBatchId),
   policies: [
     pgPolicy("tenant_isolation", {
       for: "all",

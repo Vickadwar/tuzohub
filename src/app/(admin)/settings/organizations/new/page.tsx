@@ -63,9 +63,8 @@ export default function NewOrganizationPage() {
     const load = async () => {
       try {
         const townsRes = await authenticatedFetch("/api/locations/towns");
-        if (townsRes.success) {
-          setTownsList(townsRes.data || []);
-        }
+        const list = Array.isArray(townsRes) ? townsRes : (townsRes?.data || []);
+        setTownsList(list);
       } catch (err: any) {
         // Towns optional
       } finally {
@@ -86,25 +85,25 @@ export default function NewOrganizationPage() {
 
     try {
       const payload: any = {
-        name: formData.name,
+        name: formData.name.trim(),
         type: formData.type,
       };
-      if (formData.registrationNumber) payload.registrationNumber = formData.registrationNumber;
-      if (formData.taxId) payload.taxId = formData.taxId;
-      if (formData.phone) payload.phone = formData.phone;
-      if (formData.email) payload.email = formData.email;
-      if (formData.addressLine1) payload.addressLine1 = formData.addressLine1;
-      if (formData.townId) payload.townId = formData.townId;
+      if (formData.registrationNumber.trim()) payload.registrationNumber = formData.registrationNumber.trim();
+      if (formData.taxId.trim()) payload.taxId = formData.taxId.trim();
+      if (formData.phone.trim()) payload.phone = formData.phone.trim();
+      if (formData.email.trim()) payload.email = formData.email.trim();
+      if (formData.addressLine1.trim()) payload.addressLine1 = formData.addressLine1.trim();
+      if (formData.townId.trim()) payload.townId = formData.townId.trim();
 
       const data = await authenticatedFetch("/api/organizations", {
         method: "POST",
         body: JSON.stringify(payload),
       });
 
-      if (data.success) {
+      if (data) {
         router.push("/settings/organizations");
       } else {
-        setError(data.error || "Failed to create organization.");
+        setError("Failed to create organization.");
       }
     } catch (err: any) {
       setError(err.message || "Network error occurred.");

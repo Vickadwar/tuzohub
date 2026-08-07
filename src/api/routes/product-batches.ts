@@ -64,9 +64,11 @@ app.post("/", zValidator("json", productBatchSchema), async (c) => {
 app.get("/:id", async (c) => {
   const user = c.get("user");
   const id = c.req.param("id");
+  const page = parseInt(c.req.query("page") || "1");
+  const limit = parseInt(c.req.query("limit") || "50");
 
   try {
-    const batch = await ProductBatchService.getBatch(id, user.tenantId);
+    const batch = await ProductBatchService.getBatch(id, user.tenantId, page, limit);
     return c.json({ success: true, data: batch });
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 404);

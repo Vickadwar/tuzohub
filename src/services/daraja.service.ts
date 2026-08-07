@@ -134,5 +134,70 @@ export class DarajaService {
       throw new Error("Daraja Balance Query Failed");
     }
   }
+
+  /**
+   * Triggers a B2B Payout (Business to Business / Shortcode to Shortcode / Merchant / Paybill)
+   */
+  static async sendB2bPayout(params: {
+    config: DarajaConfig;
+    amount: number;
+    destinationShortCode: string;
+    remarks: string;
+    commandId?: "BusinessPayment" | "BusinessBuyGoods" | "DisburseFundsToBusiness";
+    senderIdentifierType?: "4"; // 4 = Shortcode
+    receiverIdentifierType?: "4" | "2"; // 4 = Shortcode, 2 = Till Number
+  }) {
+    const {
+      config,
+      amount,
+      destinationShortCode,
+      remarks,
+      commandId = "BusinessPayment",
+      senderIdentifierType = "4",
+      receiverIdentifierType = "4",
+    } = params;
+
+    if (config.consumerKey.includes("PLACEHOLDER") || !config.consumerKey) {
+      console.log(`[Daraja B2B Simulation] Transferring ${amount} KES to ${destinationShortCode}`);
+      return {
+        ConversationID: `SIM-B2B-${Math.random().toString(36).slice(2, 9)}`,
+        OriginatorConversationID: `SIM-ORG-B2B-${Math.random().toString(36).slice(2, 9)}`,
+        ResponseDescription: "Accept the service request successfully.",
+      };
+    }
+
+    const accessToken = await this.getAccessToken(config);
+
+    let securityCredential = config.securityCredential;
+    if ((!securityCredential || securityCredential === "PLACEHOLDER") && config.initiatorPassword) {
+      securityCredential = generateSecurityCredential(config.initiatorPassword, config.certificatePem, config.baseUrl);
+    }
+
+    const payload = {
+      Initiator: config.initiatorName,
+      SecurityCredential: securityCredential,
+      CommandID: commandId,
+      SenderIdentifierType: senderIdentifierType,
+      RecieverIdentifierType: receiverIdentifierType,
+      Amount: Math.floor(amount),
+      PartyA: config.shortCode,
+      PartyB: destinationShortCode,
+      AccountReference: remarks.slice(0, 12),
+      Remarks: remarks,
+      QueueTimeOutURL: config.queueTimeOutUrl,
+      ResultURL: config.callbackUrl,
+    };
+
+    try {
+      const response = await axios.post(`${config.baseUrl}/mpesa/b2b/v1/paymentrequest`, payload, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        timeout: 15000,
+      });
+      return response.data;
+    } catch (error: any) {
+      console.error("Daraja B2B Error:", error.response?.data || error.message);
+      throw new Error("Daraja B2B Transfer Failed");
+    }
+  }
 }
 

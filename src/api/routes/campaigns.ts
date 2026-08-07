@@ -10,17 +10,25 @@ import { supabase } from "../../lib/supabase";
 const app = new Hono<{ Variables: { user: any } }>();
 
 async function resolveTenantId(c: Context) {
-  let tenantId = c.req.query("tenantId") || c.get("user")?.tenantId;
-  if (tenantId) return tenantId;
+  const user = c.get("user");
+
+  // Allow SYSTEM_ADMIN to explicitly scope to a tenant via query param
+  if (user?.role === "SYSTEM_ADMIN" && c.req.query("tenantId")) {
+    return c.req.query("tenantId");
+  }
+
+  if (user?.tenantId) {
+    return user.tenantId;
+  }
 
   const authHeader = c.req.header("Authorization");
   if (authHeader && authHeader.startsWith("Bearer ")) {
     try {
       const token = authHeader.split(" ")[1];
-      const { data: { user } } = await supabase.auth.getUser(token);
-      if (user) {
+      const { data: { user: authUser } } = await supabase.auth.getUser(token);
+      if (authUser) {
         const dbUser = await db.query.users.findFirst({
-          where: eq(users.id, user.id)
+          where: eq(users.id, authUser.id)
         });
         if (dbUser?.tenantId) return dbUser.tenantId;
       }
@@ -29,9 +37,7 @@ async function resolveTenantId(c: Context) {
     }
   }
 
-  // Fallback to first available tenant in DB
-  const firstTenant = await db.query.tenants.findFirst();
-  return firstTenant?.id || null;
+  return null;
 }
 
 const ruleConfigSchema = z.object({
@@ -52,6 +58,9 @@ const campaignSchema = z.object({
   name: z.string().min(1, "Campaign name is required"),
   description: z.string().optional(),
   campaignType: z.string().min(1, "Campaign type is required"),
+  fulfillmentMode: z.enum(["INSTANT", "ACCUMULATION", "HYBRID"]).optional(),
+  instantRewardType: z.enum(["CASHBACK", "AIRTIME", "MOBILE_DATA", "SHOPPING_VOUCHER"]).optional().nullable(),
+  instantValue: z.union([z.string(), z.number()]).optional().nullable(),
   pointsMultiplier: z.string().optional(),
   startDate: z.string().transform((str) => new Date(str)),
   endDate: z.string().optional().transform((str) => str ? new Date(str) : undefined),
@@ -130,17 +139,17 @@ app.get("/:id", async (c) => {
 /**
  * PATCH /api/campaigns/:id
  */
-app.patch("/:id", zValidator("json", campaignSchema.partial()), async (c) => {
+app.patch("/:id", async (c) => {
   const tenantId = await resolveTenantId(c);
   const id = c.req.param("id");
-  const body = c.req.valid("json");
 
   if (!tenantId) {
     return c.json({ success: false, error: "Tenant reference not found" }, 403);
   }
 
   try {
-    const campaign = await CampaignService.updateCampaign(id, tenantId, body as any);
+    const body = await c.req.json();
+    const campaign = await CampaignService.updateCampaign(id, tenantId, body);
     return c.json({ success: true, data: campaign });
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 400);

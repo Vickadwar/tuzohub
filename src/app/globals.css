@@ -187,8 +187,11 @@
   [role="button"]:not(:disabled) {
     cursor: pointer;
   }
+  input, select, textarea, button {
+    font-size: 0.875rem; /* 14px text-sm base size across all inner pages */
+  }
   body {
-    @apply relative font-normal font-satoshi z-1 bg-gray-50;
+    @apply relative font-normal font-satoshi z-1 bg-gray-50 text-sm;
   }
 }
 

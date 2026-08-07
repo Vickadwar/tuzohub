@@ -1,33 +1,37 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
-import { authenticatedFetch } from "@/hooks/useApi";
-import ModernSelect from "@/components/ui/ModernSelect";
+import { authenticatedFetch, useApi } from "@/hooks/useApi";
 import Checkbox from "@/components/form/input/Checkbox";
 import IntegrationsManager from "@/components/admin/settings/IntegrationsManager";
+import KenyaPhoneInput from "@/components/ui/KenyaPhoneInput";
+import { useTenant } from "@/context/TenantContext";
+import { resolveRewardTerminology } from "@/lib/rewardTerminology";
 
-function Field({ label, hint, action, children }: { label: string; hint?: React.ReactNode; action?: React.ReactNode; children: React.ReactNode }) {
+function SectionHeader({ icon, title, subtitle }: { icon: React.ReactNode; title: string; subtitle: string }) {
   return (
-    <div className="flex flex-col">
-      <div className="mb-1.5 flex items-center justify-between">
-        <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300">{label}</label>
-        {action && <div>{action}</div>}
+    <div className="flex items-center gap-3 border-b border-gray-200 dark:border-gray-800 pb-4 mb-6">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gray-100 dark:bg-gray-800 text-brand-600 dark:text-brand-400 font-bold text-sm border border-gray-200 dark:border-gray-700 shadow-xs">
+        {icon}
       </div>
-      {children}
-      {hint && <div className="mt-1.5 text-[11px] text-gray-400">{hint}</div>}
+      <div>
+        <h2 className="text-base font-bold text-gray-900 dark:text-white">{title}</h2>
+        <p className="text-xs text-gray-500 dark:text-gray-400">{subtitle}</p>
+      </div>
     </div>
   );
 }
 
-function LocalFormSection({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
+function Field({ label, hint, action, className, children }: { label: string; hint?: React.ReactNode; action?: React.ReactNode; className?: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border border-gray-200/80 bg-white shadow-sm dark:border-white/[0.06] dark:bg-white/[0.02]">
-      <div className="border-b border-gray-100 px-6 py-4 dark:border-white/5">
-        <h2 className="text-sm font-bold text-gray-900 dark:text-white">{title}</h2>
-        <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{description}</p>
+    <div className={`flex flex-col ${className || ""}`}>
+      <div className="mb-1.5 flex items-center justify-between">
+        <label className="block text-sm font-semibold text-gray-800 dark:text-gray-200">{label}</label>
+        {action && <div>{action}</div>}
       </div>
-      <div className="p-6">{children}</div>
+      {children}
+      {hint && <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">{hint}</div>}
     </div>
   );
 }
@@ -36,24 +40,95 @@ function LocalTextInput({ className, ...props }: React.InputHTMLAttributes<HTMLI
   return (
     <input
       {...props}
-      className={`h-10 w-full rounded-xl border border-gray-200 bg-gray-50/50 px-3.5 text-xs font-medium text-gray-900 shadow-2xs transition-colors placeholder:text-gray-400 focus:border-brand-500/40 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/30 dark:border-white/10 dark:bg-white/[0.03] dark:text-white dark:placeholder:text-white/30 dark:focus:bg-transparent ${className || ""}`}
+      className={`h-10 w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3.5 text-sm font-medium text-gray-900 dark:text-white shadow-xs transition-all placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 ${className || ""}`}
     />
   );
 }
 
+// Enhanced Brand Primary Color Picker
+function EnhancedColorPicker({ value, onChange }: { value: string; onChange: (hex: string) => void }) {
+  const presetSwatches = [
+    { name: "Indigo", hex: "#4f46e5" },
+    { name: "Emerald", hex: "#059669" },
+    { name: "Sapphire", hex: "#0284c7" },
+    { name: "Violet", hex: "#7c3aed" },
+    { name: "Rose", hex: "#e11d48" },
+    { name: "Amber", hex: "#d97706" },
+    { name: "Obsidian", hex: "#18181b" },
+  ];
+
+  return (
+    <div className="space-y-3">
+      {/* Preset Brand Swatches */}
+      <div className="flex flex-wrap items-center gap-2">
+        {presetSwatches.map((swatch) => {
+          const isSelected = value?.toLowerCase() === swatch.hex.toLowerCase();
+          return (
+            <button
+              key={swatch.hex}
+              type="button"
+              onClick={() => onChange(swatch.hex)}
+              className={`h-7 px-2.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition border ${isSelected
+                  ? "border-gray-900 dark:border-white ring-2 ring-brand-500/40 text-gray-900 dark:text-white shadow-xs"
+                  : "border-gray-200 dark:border-gray-700 hover:border-gray-300 text-gray-600 dark:text-gray-400"
+                }`}
+            >
+              <span className="h-3.5 w-3.5 rounded-full border border-black/10 shadow-2xs" style={{ backgroundColor: swatch.hex }} />
+              {swatch.name}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Custom Color Input & Wheel */}
+      <div className="flex items-center gap-3">
+        <label
+          className="relative flex h-10 w-10 shrink-0 cursor-pointer rounded-full border-2 border-white dark:border-gray-800 shadow-md ring-2 ring-gray-200 dark:ring-gray-700 transition-transform hover:scale-105 overflow-hidden items-center justify-center"
+          style={{ backgroundColor: value || "#4f46e5" }}
+          title="Click to select custom color"
+        >
+          <input
+            type="color"
+            value={value || "#4f46e5"}
+            onChange={(e) => onChange(e.target.value)}
+            className="absolute inset-0 h-full w-full opacity-0 cursor-pointer"
+          />
+        </label>
+        <LocalTextInput
+          type="text"
+          value={value || ""}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="#4f46e5"
+          className="font-mono uppercase text-sm"
+        />
+      </div>
+    </div>
+  );
+}
+
 export default function PlatformSettingsPage() {
-  const [tenantSlug, setTenantSlug] = useState("");
+  const { tenant: contextTenant, settings: contextSettings, refreshTenant } = useTenant();
+
+  // Real Database Overview Stats
+  const { data: statsData } = useApi("/loyalty/stats/overview");
+
+  const [tenantName, setTenantName] = useState("");
   const [tenantId, setTenantId] = useState("");
-  const [formData, setFormData] = useState({
-    countryId: "",
-    baseCurrency: "",
+  const [tenantSlug, setTenantSlug] = useState("");
+  const [countryDisplay, setCountryDisplay] = useState("");
+  const [currencyDisplay, setCurrencyDisplay] = useState("");
+  const [ussdStrategyDisplay, setUssdStrategyDisplay] = useState("DEFAULT");
+  const [shortcodeDisplay, setShortcodeDisplay] = useState("*384*20#");
+  const [isDedicatedDisplay, setIsDedicatedDisplay] = useState(false);
+
+  const defaultFormValues = {
     defaultPointValue: "1.00",
     pointExpiryMonths: "12",
 
     // Promotional & Reward Model
     defaultRewardMode: "POINTS",
     rewardUnitLabel: "PTS",
-    
+
     // Consumer Controls
     defaultCanPurchase: true,
     defaultCanEarnPoints: true,
@@ -64,13 +139,13 @@ export default function PlatformSettingsPage() {
     // Fraud & Security
     maxFailedRedemptionsPerHour: 5,
     requireMfaForRedemption: false,
+    mfaHighValueThreshold: "5000",
     redemptionVelocityCheckMinutes: 60,
     maxPointsEarnedPerDay: "1000",
 
     // Branding
     brandPrimaryColor: "#4f46e5",
     brandLogoUrl: "",
-    smsSenderId: "",
 
     // Tenant Legal & Consumer T&Cs
     consumerTermsUrl: "",
@@ -80,38 +155,46 @@ export default function PlatformSettingsPage() {
 
     // Credentials
     credentials: {} as Record<string, any>,
-  });
-  const [countriesList, setCountriesList] = useState<{ id: string; name: string; code: string }[]>([]);
-  const [currenciesList, setCurrenciesList] = useState<{ code: string; name: string; symbol: string }[]>([]);
-  
+  };
+
+  const [formData, setFormData] = useState(defaultFormValues);
+  const [initialFormData, setInitialFormData] = useState(defaultFormValues);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
+  // Check if form has unsaved changes (smart dirtiness check)
+  const isDirty = useMemo(() => {
+    return JSON.stringify(formData) !== JSON.stringify(initialFormData);
+  }, [formData, initialFormData]);
+
   useEffect(() => {
     const load = async () => {
       try {
-        const [tenantRes, countriesRes, currenciesRes] = await Promise.all([
-          authenticatedFetch("/api/tenants/me"),
-          authenticatedFetch("/api/tenants/countries"),
-          authenticatedFetch("/api/tenants/currencies"),
-        ]);
+        const tenant = await authenticatedFetch("/api/tenants/me");
 
-        if (tenantRes.success && tenantRes.data) {
-          const t = tenantRes.data;
-          const s = t.settings || {};
-          setTenantSlug(t.slug || "");
-          setTenantId(t.id || "");
-          setFormData({
-            countryId: t.countryId || "",
-            baseCurrency: t.baseCurrency || "",
-            defaultPointValue: t.defaultPointValue || "1.00",
-            pointExpiryMonths: String(t.pointExpiryMonths || 12),
+        if (tenant) {
+          const s = tenant.settings || {};
+
+          setTenantName(tenant.name || "Organization");
+          setTenantId(tenant.id || "");
+          setTenantSlug(tenant.slug || "");
+          setCountryDisplay(tenant.countryName ? `${tenant.countryName}` : tenant.countryId || "Kenya");
+          setCurrencyDisplay(tenant.baseCurrency ? `${tenant.baseCurrency} (${tenant.currencySymbol || ""})` : "KES");
+
+          setUssdStrategyDisplay(s.ussdHandlerStrategy || (tenant.slug === "gamma-coatings" ? "GAMMA_COATINGS" : "DEFAULT"));
+          setShortcodeDisplay(s.primaryShortcode || (s.credentials?.ussdServiceCode) || "Not Set");
+          setIsDedicatedDisplay(s.isDedicatedShortcode ?? false);
+
+          const loaded = {
+            defaultPointValue: tenant.defaultPointValue || "1.00",
+            pointExpiryMonths: String(tenant.pointExpiryMonths || 12),
 
             defaultRewardMode: s.defaultRewardMode || "POINTS",
-            rewardUnitLabel: s.rewardUnitLabel || "PTS",
-            
+            rewardUnitLabel: s.rewardUnitLabel || (s.defaultRewardMode === "INSTANT_CASHBACK" ? "KES" : "PTS"),
+
             defaultCanPurchase: s.defaultCanPurchase ?? true,
             defaultCanEarnPoints: s.defaultCanEarnPoints ?? true,
             defaultCanRedeemPoints: s.defaultCanRedeemPoints ?? true,
@@ -120,26 +203,26 @@ export default function PlatformSettingsPage() {
 
             maxFailedRedemptionsPerHour: s.maxFailedRedemptionsPerHour ?? 5,
             requireMfaForRedemption: s.requireMfaForRedemption ?? false,
+            mfaHighValueThreshold: s.mfaHighValueThreshold || "5000",
             redemptionVelocityCheckMinutes: s.redemptionVelocityCheckMinutes ?? 60,
             maxPointsEarnedPerDay: s.maxPointsEarnedPerDay ?? "1000",
 
             brandPrimaryColor: s.brandPrimaryColor || "#4f46e5",
             brandLogoUrl: s.brandLogoUrl || "",
-            smsSenderId: s.smsSenderId || "",
 
             consumerTermsUrl: s.consumerTermsUrl || "",
             consumerTermsSummary: s.consumerTermsSummary || "",
-            supportContactPhone: s.supportContactPhone || "",
-            supportContactEmail: s.supportContactEmail || "",
+            supportContactPhone: s.supportContactPhone || tenant.phone || "",
+            supportContactEmail: s.supportContactEmail || tenant.email || "",
 
             credentials: s.credentials || {},
-          });
-        }
+          };
 
-        if (countriesRes.success) setCountriesList(countriesRes.data || []);
-        if (currenciesRes.success) setCurrenciesList(currenciesRes.data || []);
+          setFormData(loaded);
+          setInitialFormData(loaded);
+        }
       } catch (err: any) {
-        setError("Failed to load tenant data: " + (err.message || ""));
+        setError("Failed to load tenant configurations: " + (err.message || ""));
       } finally {
         setIsLoading(false);
       }
@@ -150,335 +233,758 @@ export default function PlatformSettingsPage() {
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!tenantSlug) {
-      setError("Tenant not loaded yet. Please wait.");
+      setError("Tenant record not loaded yet. Please wait.");
       return;
     }
+    if (!isDirty) return;
+
     setIsSubmitting(true);
     setError("");
     setSuccess("");
 
     try {
-      const data = await authenticatedFetch(`/api/tenants/${tenantSlug}/settings`, {
+      const payload = {
+        defaultPointValue: formData.defaultPointValue,
+        pointExpiryMonths: parseInt(formData.pointExpiryMonths) || 12,
+
+        defaultRewardMode: formData.defaultRewardMode,
+        rewardUnitLabel: formData.rewardUnitLabel,
+
+        defaultCanPurchase: formData.defaultCanPurchase,
+        defaultCanEarnPoints: formData.defaultCanEarnPoints,
+        defaultCanRedeemPoints: formData.defaultCanRedeemPoints,
+        defaultCanBankPoints: formData.defaultCanBankPoints,
+        defaultCanTransferPoints: formData.defaultCanTransferPoints,
+
+        maxFailedRedemptionsPerHour: formData.maxFailedRedemptionsPerHour,
+        requireMfaForRedemption: formData.requireMfaForRedemption,
+        mfaHighValueThreshold: formData.mfaHighValueThreshold,
+        redemptionVelocityCheckMinutes: formData.redemptionVelocityCheckMinutes,
+        maxPointsEarnedPerDay: formData.maxPointsEarnedPerDay,
+
+        brandPrimaryColor: formData.brandPrimaryColor,
+        brandLogoUrl: formData.brandLogoUrl,
+
+        consumerTermsUrl: formData.consumerTermsUrl,
+        consumerTermsSummary: formData.consumerTermsSummary,
+        supportContactPhone: formData.supportContactPhone,
+        supportContactEmail: formData.supportContactEmail,
+
+        credentials: formData.credentials || {},
+      };
+
+      await authenticatedFetch(`/api/tenants/${tenantSlug}/settings`, {
         method: "PUT",
-        body: JSON.stringify({
-          baseCurrency: formData.baseCurrency,
-          defaultPointValue: formData.defaultPointValue,
-          pointExpiryMonths: parseInt(formData.pointExpiryMonths),
-
-          defaultRewardMode: formData.defaultRewardMode,
-          rewardUnitLabel: formData.rewardUnitLabel,
-          
-          defaultCanPurchase: formData.defaultCanPurchase,
-          defaultCanEarnPoints: formData.defaultCanEarnPoints,
-          defaultCanRedeemPoints: formData.defaultCanRedeemPoints,
-          defaultCanBankPoints: formData.defaultCanBankPoints,
-          defaultCanTransferPoints: formData.defaultCanTransferPoints,
-
-          maxFailedRedemptionsPerHour: formData.maxFailedRedemptionsPerHour,
-          requireMfaForRedemption: formData.requireMfaForRedemption,
-          redemptionVelocityCheckMinutes: formData.redemptionVelocityCheckMinutes,
-          maxPointsEarnedPerDay: formData.maxPointsEarnedPerDay,
-
-          brandPrimaryColor: formData.brandPrimaryColor,
-          brandLogoUrl: formData.brandLogoUrl,
-          smsSenderId: formData.smsSenderId,
-
-          consumerTermsUrl: formData.consumerTermsUrl,
-          consumerTermsSummary: formData.consumerTermsSummary,
-          supportContactPhone: formData.supportContactPhone,
-          supportContactEmail: formData.supportContactEmail,
-
-          credentials: formData.credentials || {},
-        }),
+        body: JSON.stringify(payload),
       });
 
-      if (data.success) {
-        setSuccess("Platform settings updated successfully!");
-      } else {
-        setError(data.error || "Failed to update settings.");
-      }
+      setSuccess("Platform settings saved successfully!");
+      setInitialFormData(formData);
+      refreshTenant();
     } catch (err: any) {
-      setError(err.message || "Network error occurred.");
+      setError(err.message || "Network error occurred while saving.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const handleCancelChanges = () => {
+    setFormData(initialFormData);
+    setError("");
+    setSuccess("Unsaved changes discarded.");
+  };
+
+  const handleSelectRewardMode = (modeId: string, defaultUnit: string) => {
+    const isInstant = modeId === "INSTANT_CASHBACK" || modeId === "INSTANT_AIRTIME";
+    setFormData({
+      ...formData,
+      defaultRewardMode: modeId,
+      rewardUnitLabel: defaultUnit,
+      defaultCanTransferPoints: isInstant ? false : formData.defaultCanTransferPoints,
+      defaultCanBankPoints: isInstant ? false : formData.defaultCanBankPoints,
+    });
+  };
+
+  const previewTerminology = resolveRewardTerminology({
+    tenantSettings: {
+      defaultRewardMode: formData.defaultRewardMode,
+      rewardUnitLabel: formData.rewardUnitLabel,
+    },
+  });
+
+  const getFriendlyRewardModeLabel = (mode: string) => {
+    switch (mode) {
+      case "INSTANT_CASHBACK":
+        return "Instant Cashback";
+      case "INSTANT_AIRTIME":
+        return "Instant Airtime";
+      case "HYBRID":
+        return "Hybrid Engine";
+      case "POINTS":
+      default:
+        return "Points Accumulation";
+    }
+  };
+
+  const getDailyCapLabel = () => {
+    switch (formData.defaultRewardMode) {
+      case "INSTANT_CASHBACK":
+        return `Max cashback earned per day (${formData.rewardUnitLabel || "KES"})`;
+      case "INSTANT_AIRTIME":
+        return `Max airtime earned per day (${formData.rewardUnitLabel || "Airtime"})`;
+      case "HYBRID":
+        return `Max rewards earned per day (${formData.rewardUnitLabel || "PTS / KES"})`;
+      case "POINTS":
+      default:
+        return `Max points earned per day (${formData.rewardUnitLabel || "PTS"})`;
+    }
+  };
+
+  const getDailyCapHint = () => {
+    switch (formData.defaultRewardMode) {
+      case "INSTANT_CASHBACK":
+        return "Cap instant cash payouts per consumer in a 24-hour period";
+      case "INSTANT_AIRTIME":
+        return "Cap instant airtime top-ups per consumer in a 24-hour period";
+      case "HYBRID":
+        return "Cap combined points and instant dispatches per consumer in 24 hours";
+      case "POINTS":
+      default:
+        return "Cap points earned per consumer in a 24-hour period";
+    }
+  };
+
+  const isInstantMode = formData.defaultRewardMode === "INSTANT_CASHBACK" || formData.defaultRewardMode === "INSTANT_AIRTIME";
+
+  const featureRulesList = [
+    {
+      key: "defaultCanPurchase",
+      title: "Product purchasing",
+      desc: "Consumers can purchase catalog items",
+      disabled: false,
+      badge: null,
+    },
+    {
+      key: "defaultCanEarnPoints",
+      title: formData.defaultRewardMode === "INSTANT_CASHBACK"
+        ? "Instant cashback qualification"
+        : formData.defaultRewardMode === "INSTANT_AIRTIME"
+          ? "Instant airtime qualification"
+          : "Point earning",
+      desc: isInstantMode
+        ? "Consumers qualify for instant dispatches upon scan/activity"
+        : "Consumers earn points via scans or purchases",
+      disabled: false,
+      badge: null,
+    },
+    {
+      key: "defaultCanRedeemPoints",
+      title: formData.defaultRewardMode === "INSTANT_CASHBACK"
+        ? "Direct M-Pesa disbursement"
+        : formData.defaultRewardMode === "INSTANT_AIRTIME"
+          ? "Direct airtime disbursement"
+          : "Point redemption",
+      desc: isInstantMode
+        ? "Automated instant disbursements to consumer phone"
+        : "Consumers can redeem points for catalog vouchers",
+      disabled: false,
+      badge: null,
+    },
+    {
+      key: "defaultCanBankPoints",
+      title: "Point banking",
+      desc: isInstantMode
+        ? "Instant dispatches bypass wallet banking"
+        : "Allow points to roll over safely in consumer wallet",
+      disabled: isInstantMode,
+      badge: isInstantMode ? "Direct dispatches" : null,
+    },
+    {
+      key: "defaultCanTransferPoints",
+      title: "Peer point transfer",
+      desc: isInstantMode
+        ? "Peer point transfer unavailable for instant payout modes"
+        : "Allow transferring points between consumer accounts",
+      disabled: isInstantMode,
+      badge: isInstantMode ? "Not applicable" : null,
+    },
+  ];
+
+  // Real Database Numbers from statsData
+  const activeBalanceNum = statsData?.overview?.totalPointsIssued ?? statsData?.totalPoints ?? 0;
+  const totalEarnedNum = statsData?.overview?.totalPointsEarned ?? statsData?.earned ?? 0;
+  const totalRedeemedNum = statsData?.overview?.totalPointsRedeemed ?? statsData?.redeemed ?? 0;
+
   if (isLoading) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3">
+        <div className="h-10 w-10 animate-spin rounded-full border-3 border-brand-500 border-t-transparent" />
+        <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Loading platform settings...</p>
       </div>
     );
   }
 
+  const rewardModes = [
+    {
+      id: "POINTS",
+      title: "Points Accumulation",
+      badge: "Loyalty engine",
+      defaultUnit: "PTS",
+      svgIcon: (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      ),
+      desc: "Consumers earn points per scan or purchase, bank them in their wallet, and redeem against reward catalog items.",
+    },
+    {
+      id: "INSTANT_CASHBACK",
+      title: "Instant Cashback",
+      badge: "Instant payout",
+      defaultUnit: "KES",
+      svgIcon: (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+        </svg>
+      ),
+      desc: "Consumers scan or qualify and instantly receive direct Safaricom M-Pesa cash dispatches sent to their phone.",
+    },
+    {
+      id: "INSTANT_AIRTIME",
+      title: "Instant Airtime",
+      badge: "Telco top-up",
+      defaultUnit: "Airtime",
+      svgIcon: (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+        </svg>
+      ),
+      desc: "Consumers receive direct telco airtime recharges immediately upon promotional scan or activity qualification.",
+    },
+    {
+      id: "HYBRID",
+      title: "Hybrid Engine",
+      badge: "Combined engine",
+      defaultUnit: "PTS / KES",
+      svgIcon: (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+        </svg>
+      ),
+      desc: "Supports both points accumulation and instant cash/airtime disbursements simultaneously based on campaign rules.",
+    },
+  ];
+
   return (
-    <div className="w-full space-y-6 animate-fadeIn pb-12">
-      {/* ── Page Header ──────────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-gray-200/80 dark:border-white/[0.06] pb-5">
-        <div className="flex items-center gap-4">
+    <div className="w-full space-y-6 animate-fadeIn pb-20">
+      {/* ── Header ────────────────────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-200 dark:border-gray-800 pb-5">
+        <div className="flex items-center gap-3.5">
           <Link
             href="/overview"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors text-gray-500 dark:text-gray-400"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-600 dark:text-gray-300 shadow-xs"
           >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
+            <svg className="h-4.5 w-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
             </svg>
           </Link>
 
-          {/* Rounded Avatar Badge */}
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-500/10 text-brand-600 dark:text-brand-400 font-bold text-xs border border-brand-500/20 shadow-2xs">
-            {tenantSlug?.charAt(0).toUpperCase() || "T"}
-          </div>
-
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white">
-                Platform Configurations
+              <h1 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
+                Platform settings
               </h1>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-brand-500/10 text-brand-600 dark:text-brand-400 text-xs font-semibold border border-brand-500/20">
-                Setup &amp; Rules
+              <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-brand-500/10 text-brand-600 dark:text-brand-400 text-xs font-bold border border-brand-500/20">
+                <span className="w-2 h-2 rounded-full bg-brand-500 animate-pulse" />
+                {tenantName}
               </span>
             </div>
             <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-              Manage core tenant rules for loyalty programs, security parameters, and branding.
+              Manage organization rules, promotional models, branding assets, and security controls.
             </p>
           </div>
         </div>
 
+        {/* ── Action Buttons with Cancel / Discard & Save ── */}
         <div className="flex items-center gap-3">
+          {isDirty && (
+            <>
+              <button
+                type="button"
+                onClick={handleCancelChanges}
+                disabled={isSubmitting}
+                className="px-4 py-2 text-xs font-semibold rounded-xl border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+              >
+                Cancel / Discard
+              </button>
+              <span className="text-xs font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-1.5 animate-pulse hidden sm:flex">
+                <span className="w-2 h-2 rounded-full bg-amber-500" />
+                Unsaved changes
+              </span>
+            </>
+          )}
+
           <button
             onClick={() => handleSubmit()}
-            disabled={isSubmitting}
-            className="px-5 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold rounded-xl shadow-md shadow-brand-500/20 transition disabled:opacity-50"
+            disabled={!isDirty || isSubmitting}
+            className={`px-5 py-2.5 text-xs font-bold rounded-xl transition flex items-center gap-2 ${isDirty && !isSubmitting
+                ? "bg-brand-600 hover:bg-brand-700 text-white shadow-md ring-2 ring-brand-500/30 cursor-pointer"
+                : "bg-gray-200 dark:bg-gray-800 text-gray-400 dark:text-gray-600 cursor-not-allowed border border-gray-300 dark:border-gray-700"
+              }`}
           >
-            {isSubmitting ? "Saving..." : "Save Settings"}
+            {isSubmitting ? (
+              <>
+                <svg className="w-4 h-4 animate-spin text-white" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                Saving settings...
+              </>
+            ) : isDirty ? (
+              <>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                </svg>
+                Save settings
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+                Settings saved
+              </>
+            )}
           </button>
         </div>
       </div>
 
       {error && (
-        <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-semibold">
+        <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-sm font-semibold flex items-center gap-2">
+          <svg className="w-4.5 h-4.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
           {error}
         </div>
       )}
-      
+
       {success && (
-        <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-semibold">
+        <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-sm font-semibold flex items-center gap-2">
+          <svg className="w-4.5 h-4.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
           {success}
         </div>
       )}
 
       <div className="grid grid-cols-12 gap-6">
-        
-        {/* Left Column (8 Columns) */}
+
+        {/* Main Settings Column (8 Columns) */}
         <div className="col-span-12 xl:col-span-8 space-y-6">
-          
-          {/* ── Finance & Core ── */}
-          <LocalFormSection title="Finance & Core Setup" description="Primary operating country and currency configurations">
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-              <Field label="Operating Country">
-                <ModernSelect
-                  options={countriesList.map((c) => ({ value: c.id, label: `${c.name} (${c.code})` }))}
-                  value={formData.countryId}
-                  onChange={(val) => setFormData({ ...formData, countryId: val })}
-                  placeholder="Select country"
-                />
+
+          {/* ── 1. Organization Identity ── */}
+          <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 shadow-xs">
+            <SectionHeader
+              icon={
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5m3 0v-4a1 1 0 011-1h2a1 1 0 011 1v4m-4 0h4" />
+                </svg>
+              }
+              title="Organization identity & territory"
+              subtitle="Core details established during onboarding (Protected & Read-Only)"
+            />
+
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+              <Field
+                label="Organization name"
+                hint="Established on registration"
+                action={<span className="text-xs font-semibold text-gray-400 dark:text-gray-500">🔒 Protected</span>}
+              >
+                <div className="h-10 w-full rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-100 dark:bg-gray-800/60 px-3.5 flex items-center text-sm font-semibold text-gray-700 dark:text-gray-300 cursor-not-allowed">
+                  {tenantName}
+                </div>
               </Field>
-              <Field label="Base Currency">
-                <ModernSelect
-                  options={currenciesList.map((c) => ({ value: c.code, label: `${c.symbol} — ${c.name} (${c.code})` }))}
-                  value={formData.baseCurrency}
-                  onChange={(val) => setFormData({ ...formData, baseCurrency: val })}
-                  placeholder="Select currency"
-                />
+
+              <Field
+                label="Operating country"
+                hint="Primary region"
+                action={<span className="text-xs font-semibold text-gray-400 dark:text-gray-500">🔒 Protected</span>}
+              >
+                <div className="h-10 w-full rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-100 dark:bg-gray-800/60 px-3.5 flex items-center text-sm font-semibold text-gray-700 dark:text-gray-300 cursor-not-allowed">
+                  {countryDisplay}
+                </div>
               </Field>
-              <Field label="Default Point Value (KES)" hint="Value in fiat for each point earned">
-                <LocalTextInput
-                  type="number" step="0.01"
-                  value={formData.defaultPointValue}
-                  onChange={(e) => setFormData({ ...formData, defaultPointValue: e.target.value })}
-                />
-              </Field>
-              <Field label="Point Expiry (Months)" hint="Points expire after this duration">
-                <LocalTextInput
-                  type="number"
-                  value={formData.pointExpiryMonths}
-                  onChange={(e) => setFormData({ ...formData, pointExpiryMonths: e.target.value })}
-                />
+
+              <Field
+                label="Base currency"
+                hint="Settlement currency"
+                action={<span className="text-xs font-semibold text-gray-400 dark:text-gray-500">🔒 Protected</span>}
+              >
+                <div className="h-10 w-full rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-100 dark:bg-gray-800/60 px-3.5 flex items-center text-sm font-semibold text-gray-700 dark:text-gray-300 cursor-not-allowed">
+                  {currencyDisplay}
+                </div>
               </Field>
             </div>
-          </LocalFormSection>
 
-          {/* ── Promotional & Reward Model Defaults ── */}
-          <LocalFormSection title="Promotional & Reward Model Defaults" description="Specify whether this organization runs Points Accumulation, Instant M-Pesa Cashback, or Airtime">
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-              <Field label="Default Tenant Reward Model" hint="Campaigns inherit this unless overridden per campaign">
-                <ModernSelect
-                  options={[
-                    { value: "POINTS", label: "Points Accumulation (Traditional Loyalty)" },
-                    { value: "INSTANT_CASHBACK", label: "Instant Gratification (M-Pesa Cashback Payouts)" },
-                    { value: "INSTANT_AIRTIME", label: "Instant Airtime Recharge" },
-                    { value: "HYBRID", label: "Hybrid (Points + Instant Cashback)" },
-                  ]}
-                  value={formData.defaultRewardMode}
-                  onChange={(val) => setFormData({ ...formData, defaultRewardMode: val })}
-                  placeholder="Select default reward mode"
-                />
-              </Field>
-              <Field label="Reward Unit Symbol / Label" hint="e.g. PTS, KES, Airtime, Tokens">
-                <LocalTextInput
-                  value={formData.rewardUnitLabel}
-                  onChange={(e) => setFormData({ ...formData, rewardUnitLabel: e.target.value })}
-                  placeholder="e.g. PTS or KES"
-                />
-              </Field>
-            </div>
-          </LocalFormSection>
+            {/* Telco USSD Allocation Sub-card */}
+            <div className="mt-5 pt-5 border-t border-gray-200 dark:border-gray-800">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                  <svg className="w-4 h-4 text-brand-600 dark:text-brand-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  </svg>
+                  Allocated telco shortcode & USSD strategy
+                </h3>
+                <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                  🔒 Managed by Platform Owner
+                </span>
+              </div>
 
-          {/* ── Consumer Controls ── */}
-          <LocalFormSection title="Consumer Permissions" description="Global toggles for participant capabilities">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50/50 dark:bg-white/[0.01] border border-gray-100 dark:border-white/5">
-                <Checkbox checked={formData.defaultCanEarnPoints} onChange={(val) => setFormData({ ...formData, defaultCanEarnPoints: val })} />
-                <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">Allow Earning Points</span>
-              </div>
-              <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50/50 dark:bg-white/[0.01] border border-gray-100 dark:border-white/5">
-                <Checkbox checked={formData.defaultCanRedeemPoints} onChange={(val) => setFormData({ ...formData, defaultCanRedeemPoints: val })} />
-                <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">Allow Point Redemptions</span>
-              </div>
-              <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50/50 dark:bg-white/[0.01] border border-gray-100 dark:border-white/5">
-                <Checkbox checked={formData.defaultCanBankPoints} onChange={(val) => setFormData({ ...formData, defaultCanBankPoints: val })} />
-                <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">Enable Point Banking</span>
-              </div>
-              <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50/50 dark:bg-white/[0.01] border border-gray-100 dark:border-white/5">
-                <Checkbox checked={formData.defaultCanTransferPoints} onChange={(val) => setFormData({ ...formData, defaultCanTransferPoints: val })} />
-                <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">Enable Peer-to-Peer Transfers</span>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div className="p-3.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/40">
+                  <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 block mb-0.5">Assigned Shortcode</span>
+                  <span className="font-mono text-sm font-bold text-brand-600 dark:text-brand-400">
+                    {shortcodeDisplay}
+                  </span>
+                </div>
+
+                <div className="p-3.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/40">
+                  <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 block mb-0.5">USSD Strategy Handler</span>
+                  <span className="text-xs font-bold text-gray-800 dark:text-gray-200">
+                    {ussdStrategyDisplay === "GAMMA_COATINGS" ? "Gamma Coatings Enterprise Flow" : "Standard Modular Engine"}
+                  </span>
+                </div>
+
+                <div className="p-3.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/40">
+                  <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 block mb-0.5">Channel Allocation</span>
+                  <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    {isDedicatedDisplay ? "Dedicated Shortcode" : "Shared Aggregator Channel"}
+                  </span>
+                </div>
               </div>
             </div>
-          </LocalFormSection>
+          </div>
 
-          {/* ── Fraud & Security ── */}
-          <LocalFormSection title="Fraud & Security Controls" description="Rules to prevent unauthorized system access or abuse">
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-              <Field label="Max Failed Redemptions / Hour">
+          {/* ── 2. Promotional & Reward Engine Model ── */}
+          <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 shadow-xs">
+            <SectionHeader
+              icon={
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5a2 2 0 10-2 2h2zm0 13C10.832 21 2 20 2 12V8a2 2 0 012-2h16a2 2 0 012 2v4c0 8-8.832 9-10 9z" />
+                </svg>
+              }
+              title="Promotional & reward engine model"
+              subtitle="Select how consumer profiles, reward balances, and payouts display across the platform"
+            />
+
+            <div className="space-y-5">
+              <div>
+                <label className="block text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2.5">
+                  Default reward engine mode
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  {rewardModes.map((mode) => {
+                    const isSelected = formData.defaultRewardMode === mode.id;
+                    return (
+                      <div
+                        key={mode.id}
+                        onClick={() => handleSelectRewardMode(mode.id, mode.defaultUnit)}
+                        className={`p-4 rounded-xl border cursor-pointer transition-all flex items-start gap-3.5 ${isSelected
+                            ? "border-brand-600 bg-brand-50/40 dark:bg-brand-950/20 ring-1 ring-brand-500/20"
+                            : "border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-800/40 hover:border-gray-300 dark:hover:border-gray-700"
+                          }`}
+                      >
+                        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isSelected
+                            ? "bg-brand-600 text-white"
+                            : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400"
+                          }`}>
+                          {mode.svgIcon}
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-sm font-bold text-gray-900 dark:text-white">
+                              {mode.title}
+                            </span>
+                            <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${isSelected ? "bg-brand-600 text-white" : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400"
+                              }`}>
+                              {mode.badge}
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                            {mode.desc}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 pt-4 border-t border-gray-200 dark:border-gray-800">
+                <Field label="Reward unit symbol" hint="Displayed on balance cards (e.g. PTS, KES, Airtime)">
+                  <LocalTextInput
+                    type="text"
+                    value={formData.rewardUnitLabel}
+                    onChange={(e) => setFormData({ ...formData, rewardUnitLabel: e.target.value })}
+                    placeholder="PTS"
+                  />
+                </Field>
+
+                <Field label="Default point value (KES)" hint="Fiat value equivalent per point">
+                  <LocalTextInput
+                    type="number"
+                    step="0.01"
+                    value={formData.defaultPointValue}
+                    onChange={(e) => setFormData({ ...formData, defaultPointValue: e.target.value })}
+                  />
+                </Field>
+
+                <Field label="Point expiry (months)" hint="Expiration window for points">
+                  <LocalTextInput
+                    type="number"
+                    value={formData.pointExpiryMonths}
+                    onChange={(e) => setFormData({ ...formData, pointExpiryMonths: e.target.value })}
+                  />
+                </Field>
+              </div>
+            </div>
+          </div>
+
+          {/* ── 3. Consumer Feature Rules ── */}
+          <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 shadow-xs">
+            <SectionHeader
+              icon={
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                </svg>
+              }
+              title="Consumer feature rules"
+              subtitle="Enable or restrict consumer capabilities based on active reward engine"
+            />
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {featureRulesList.map((item) => (
+                <div
+                  key={item.key}
+                  className={`flex items-center justify-between p-4 rounded-xl border transition-all ${item.disabled
+                      ? "border-gray-200 dark:border-gray-800 bg-gray-100/60 dark:bg-gray-800/20 opacity-60 cursor-not-allowed"
+                      : "border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/30"
+                    }`}
+                >
+                  <div>
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <p className="text-sm font-bold text-gray-900 dark:text-white">{item.title}</p>
+                      {item.badge && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                          {item.badge}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{item.desc}</p>
+                  </div>
+                  <Checkbox
+                    checked={item.disabled ? false : (formData as any)[item.key]}
+                    onChange={(val) => !item.disabled && setFormData({ ...formData, [item.key]: val })}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* ── 4. Fraud & Security Controls ── */}
+          <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 shadow-xs">
+            <SectionHeader
+              icon={
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
+              }
+              title="Security & anti-fraud controls"
+              subtitle="Velocity safeguards and rate-limiting thresholds"
+            />
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <Field label="Max failed redemptions per hour" hint="Blocks suspected brute-force attempts">
                 <LocalTextInput
                   type="number"
                   value={formData.maxFailedRedemptionsPerHour}
-                  onChange={(e) => setFormData({ ...formData, maxFailedRedemptionsPerHour: parseInt(e.target.value) })}
+                  onChange={(e) => setFormData({ ...formData, maxFailedRedemptionsPerHour: parseInt(e.target.value) || 5 })}
                 />
               </Field>
-              <Field label="Max Points Earned Per Day">
+
+              <Field label="Velocity check window (minutes)" hint="Window for duplicate scan checks">
+                <LocalTextInput
+                  type="number"
+                  value={formData.redemptionVelocityCheckMinutes}
+                  onChange={(e) => setFormData({ ...formData, redemptionVelocityCheckMinutes: parseInt(e.target.value) || 60 })}
+                />
+              </Field>
+
+              {/* Dynamic Daily Cap Field */}
+              <Field label={getDailyCapLabel()} hint={getDailyCapHint()}>
                 <LocalTextInput
                   type="number"
                   value={formData.maxPointsEarnedPerDay}
                   onChange={(e) => setFormData({ ...formData, maxPointsEarnedPerDay: e.target.value })}
                 />
               </Field>
-              <div className="flex items-center gap-3 sm:col-span-2 p-3 rounded-xl bg-gray-50/50 dark:bg-white/[0.01] border border-gray-100 dark:border-white/5">
-                <Checkbox checked={formData.requireMfaForRedemption} onChange={(val) => setFormData({ ...formData, requireMfaForRedemption: val })} />
-                <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">Require Multi-Factor Authentication for Redemptions</span>
-              </div>
-            </div>
-          </LocalFormSection>
 
-          {/* ── Branding ── */}
-          <LocalFormSection title="Branding & Assets" description="Customize portal styling and communications header">
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-              <Field label="Brand Primary Color">
-                <div className="flex gap-2">
-                  <input
-                    type="color"
-                    className="h-10 w-12 rounded-xl border border-gray-200 dark:border-white/10 shrink-0 cursor-pointer"
-                    value={formData.brandPrimaryColor}
-                    onChange={(e) => setFormData({ ...formData, brandPrimaryColor: e.target.value })}
-                  />
-                  <LocalTextInput
-                    value={formData.brandPrimaryColor}
-                    onChange={(e) => setFormData({ ...formData, brandPrimaryColor: e.target.value })}
+              {/* High Value MFA Controls */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/30">
+                  <div>
+                    <p className="text-sm font-bold text-gray-900 dark:text-white">Require MFA for high-value payouts</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">OTP verification for large disbursements</p>
+                  </div>
+                  <Checkbox
+                    checked={formData.requireMfaForRedemption}
+                    onChange={(val) => setFormData({ ...formData, requireMfaForRedemption: val })}
                   />
                 </div>
-              </Field>
-              <Field label="SMS Sender ID" hint="Used for outbound USSD and SMS notifications">
-                <LocalTextInput
-                  value={formData.smsSenderId}
-                  onChange={(e) => setFormData({ ...formData, smsSenderId: e.target.value })}
-                  placeholder="e.g. TUZOHUB"
-                />
-              </Field>
-              <Field label="Logo URL" hint="Direct link to your organization logo">
-                <LocalTextInput
-                  value={formData.brandLogoUrl}
-                  onChange={(e) => setFormData({ ...formData, brandLogoUrl: e.target.value })}
-                  placeholder="https://..."
-                />
-              </Field>
-            </div>
-          </LocalFormSection>
 
-          {/* ── Consumer Terms & Legal Disclosures ── */}
-          <LocalFormSection title="Legal & Consumer Terms & Conditions" description="Configure terms & disclosures displayed on USSD, SMS, and Web redemption landing pages">
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-              <Field label="Consumer Terms URL" hint="Direct link to your organization's official campaign T&C document">
-                <LocalTextInput
-                  value={formData.consumerTermsUrl}
-                  onChange={(e) => setFormData({ ...formData, consumerTermsUrl: e.target.value })}
-                  placeholder="e.g. https://gammacoatings.com/terms"
-                />
-              </Field>
-              <Field label="Customer Support Phone" hint="Displayed on consumer redemption receipts for customer queries">
-                <LocalTextInput
-                  value={formData.supportContactPhone}
-                  onChange={(e) => setFormData({ ...formData, supportContactPhone: e.target.value })}
-                  placeholder="e.g. +254700000000"
-                />
-              </Field>
-              <Field label="Customer Support Email">
-                <LocalTextInput
-                  value={formData.supportContactEmail}
-                  onChange={(e) => setFormData({ ...formData, supportContactEmail: e.target.value })}
-                  placeholder="e.g. support@gammacoatings.com"
-                />
-              </Field>
-              <div className="sm:col-span-2">
-                <Field label="USSD & SMS Legal Disclosure Summary" hint="Concise terms text displayed on USSD *483*55# option 5 or SMS footers">
-                  <textarea
-                    rows={2}
-                    value={formData.consumerTermsSummary}
-                    onChange={(e) => setFormData({ ...formData, consumerTermsSummary: e.target.value })}
-                    placeholder="e.g. Rewards by Gamma Coatings. Max 5 redemptions per painter/day. Valid for registered contractors over 18 yrs. T&C: gammacoatings.com/terms"
-                    className="w-full rounded-xl border border-gray-200 bg-gray-50/50 p-3 text-xs font-medium text-gray-900 shadow-2xs transition-colors placeholder:text-gray-400 focus:border-brand-500/40 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/30 dark:border-white/10 dark:bg-white/[0.03] dark:text-white dark:placeholder:text-white/30"
-                  />
-                </Field>
-              </div>
-            </div>
-          </LocalFormSection>
-
-          {/* ── Enterprise Multi-Tenant Gateway & Integration Credentials ── */}
-          <IntegrationsManager
-            credentials={formData.credentials || {}}
-            onChange={(newCreds) => setFormData({ ...formData, credentials: newCreds })}
-            tenantId={tenantId}
-            tenantSlug={tenantSlug}
-          />
-        </div>
-
-        {/* Right Column (4 Columns) */}
-        <div className="col-span-12 xl:col-span-4 space-y-6">
-          <div className="bg-gradient-to-br from-gray-900 via-gray-950 to-black border border-gray-800 p-6 rounded-2xl text-white shadow-xl space-y-3 relative overflow-hidden">
-            <div className="relative z-10 space-y-3">
-              <span className="text-[10px] font-semibold text-brand-400 uppercase tracking-wider">Tenant Scope</span>
-              <h3 className="text-sm font-bold text-white">Platform-Wide Governance</h3>
-              <p className="text-xs text-gray-400 leading-relaxed">
-                Configurations updated on this screen take effect immediately across all regional branches, dealers, and USSD dispatch gateways.
-              </p>
-              <div className="pt-2 border-t border-gray-800 flex items-center justify-between text-xs font-mono">
-                <span className="text-gray-500">Tenant Slug</span>
-                <span className="text-brand-400 font-bold">{tenantSlug || "default"}</span>
+                {formData.requireMfaForRedemption && (
+                  <Field
+                    label="High-value payout MFA threshold (KES)"
+                    hint="Disbursements exceeding this amount will require OTP verification"
+                  >
+                    <LocalTextInput
+                      type="number"
+                      value={formData.mfaHighValueThreshold}
+                      onChange={(e) => setFormData({ ...formData, mfaHighValueThreshold: e.target.value })}
+                      placeholder="5000"
+                    />
+                  </Field>
+                )}
               </div>
             </div>
           </div>
+
+          {/* ── 5. Integrations & Credentials ── */}
+          <IntegrationsManager
+            credentials={formData.credentials}
+            onChange={(creds: Record<string, any>) => setFormData({ ...formData, credentials: creds })}
+            tenantId={tenantId || contextTenant?.id}
+            tenantSlug={tenantSlug || contextTenant?.slug}
+          />
+
         </div>
+
+        {/* Right Preview Column (4 Columns) */}
+        <div className="col-span-12 xl:col-span-4 space-y-6">
+
+          {/* Live Database Terminology Preview Widget */}
+          <div className="rounded-2xl border border-brand-500/20 bg-brand-50/30 dark:bg-brand-950/10 p-6 shadow-xs sticky top-6">
+            <SectionHeader
+              icon={
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+              }
+              title="Live database terminology preview"
+              subtitle="Real-time preview rendered using actual database stats"
+            />
+
+            <div className="space-y-4">
+              <div className="p-4.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-xs space-y-3.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">
+                    {previewTerminology.balanceHeader}
+                  </span>
+                  <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-brand-500/10 text-brand-600 dark:text-brand-400 border border-brand-500/20">
+                    {getFriendlyRewardModeLabel(previewTerminology.rewardMode)}
+                  </span>
+                </div>
+
+                <div className="text-2xl font-bold font-mono text-gray-900 dark:text-white">
+                  {Number(activeBalanceNum).toLocaleString()}{" "}
+                  <span className="text-xs font-semibold text-brand-600 dark:text-brand-400">
+                    {previewTerminology.unitLabel}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 pt-3 border-t border-gray-100 dark:border-gray-700/50 text-xs">
+                  <div>
+                    <span className="text-gray-400 block font-medium">{previewTerminology.actionEarnLabel}</span>
+                    <span className="font-bold text-gray-900 dark:text-white">
+                      +{Number(totalEarnedNum).toLocaleString()} {previewTerminology.unitLabel}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-400 block font-medium">{previewTerminology.actionRedeemLabel}</span>
+                    <span className="font-bold text-gray-900 dark:text-white">
+                      -{Number(totalRedeemedNum).toLocaleString()} {previewTerminology.unitLabel}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Branding Assets inside sidebar card with Enhanced Color Picker */}
+              <div className="p-4.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-xs space-y-4">
+                <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+                  Brand theme & logo
+                </h3>
+
+                <Field label="Brand primary color" hint="Applies tenant theme color across all inner pages">
+                  <EnhancedColorPicker
+                    value={formData.brandPrimaryColor}
+                    onChange={(hex) => setFormData({ ...formData, brandPrimaryColor: hex })}
+                  />
+                </Field>
+
+                <Field label="Brand logo image URL">
+                  <LocalTextInput
+                    type="text"
+                    value={formData.brandLogoUrl}
+                    onChange={(e) => setFormData({ ...formData, brandLogoUrl: e.target.value })}
+                    placeholder="https://example.com/logo.png"
+                  />
+                </Field>
+
+                {formData.brandLogoUrl && (
+                  <div className="p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex items-center justify-center">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={formData.brandLogoUrl} alt="Brand logo preview" className="max-h-12 object-contain" />
+                  </div>
+                )}
+              </div>
+
+              {/* Support & Legal Details with KenyaPhoneInput */}
+              <div className="p-4.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-xs space-y-4">
+                <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+                  Legal & support contacts
+                </h3>
+
+                <Field label="Support email">
+                  <LocalTextInput
+                    type="email"
+                    value={formData.supportContactEmail}
+                    onChange={(e) => setFormData({ ...formData, supportContactEmail: e.target.value })}
+                    placeholder="support@tenant.com"
+                  />
+                </Field>
+
+                <Field label="Support phone number" hint="Official helpline contact">
+                  <KenyaPhoneInput
+                    value={formData.supportContactPhone}
+                    onChange={(val) => setFormData({ ...formData, supportContactPhone: val })}
+                    placeholder="7XX XXX XXX"
+                    size="md"
+                  />
+                </Field>
+
+                <Field label="Terms & conditions URL">
+                  <LocalTextInput
+                    type="text"
+                    value={formData.consumerTermsUrl}
+                    onChange={(e) => setFormData({ ...formData, consumerTermsUrl: e.target.value })}
+                    placeholder="https://tenant.com/terms"
+                  />
+                </Field>
+              </div>
+
+            </div>
+          </div>
+
+        </div>
+
       </div>
     </div>
   );

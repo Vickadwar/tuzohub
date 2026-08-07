@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Badge from "@/components/ui/badge/Badge";
 import {
   Table,
@@ -52,6 +52,7 @@ const formatStatusLabel = (status: string): string => {
 };
 
 export default function VoucherBatchDetailsPage() {
+  const router = useRouter();
   const params = useParams();
   const id = params?.id as string;
 
@@ -67,6 +68,10 @@ export default function VoucherBatchDetailsPage() {
 
   const [isExporting, setIsExporting] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Delete Modal State
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Export Security Password Modal State
   const [exportSecurityModalOpen, setExportSecurityModalOpen] = useState(false);
@@ -133,9 +138,8 @@ export default function VoucherBatchDetailsPage() {
     setIsExporting(true);
     try {
       const res = await authenticatedFetch(`/api/vouchers/batches/${id}/export-csv`);
-      if (!res.success) throw new Error(res.error || "Export failed.");
-
-      const rows = res.data || [];
+      const rows = Array.isArray(res) ? res : (res?.data || []);
+      if (!rows.length) throw new Error("No cards found in batch to export.");
       if (!rows.length) throw new Error("No cards found in batch to export.");
 
       const headers = ["Serial Number", "Scratch Code (Secret)", "Batch Reference", "Product SKU", "Product Name"];
@@ -169,6 +173,25 @@ export default function VoucherBatchDetailsPage() {
       setExportError(err.message || "CSV Export failed.");
     } finally {
       setIsExporting(false);
+    }
+  };
+
+  const confirmDeleteBatch = async () => {
+    if (!batch) return;
+    setIsDeleting(true);
+    try {
+      const res = await authenticatedFetch(`/api/vouchers/batches/${id}`, {
+        method: "DELETE",
+      });
+
+      if (res) {
+        showToast(`🗑️ Batch "${batch.batchNumber}" deleted successfully.`);
+        router.push("/vouchers");
+      }
+    } catch (err: any) {
+      showToast(err.message || "Failed to delete batch.");
+      setIsDeleting(false);
+      setDeleteModalOpen(false);
     }
   };
 
@@ -384,6 +407,69 @@ export default function VoucherBatchDetailsPage() {
             >
               🏭 Load in Factory Production Run &rarr;
             </Link>
+          )}
+
+          {counts.redeemed === 0 && (
+            <button
+              onClick={() => setDeleteModalOpen(true)}
+              className="px-3.5 py-2 bg-rose-500/10 text-rose-600 hover:bg-rose-500/20 text-xs font-semibold rounded-xl border border-rose-500/20 transition flex items-center gap-1.5"
+            >
+              🗑️ Delete Unused Batch
+            </button>
+          )}
+
+          {/* Delete Batch Confirmation Modal */}
+          {deleteModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
+              <div className="w-full max-w-md bg-white dark:bg-gray-900 border border-gray-200 dark:border-white/10 rounded-3xl p-6 shadow-2xl space-y-5 animate-in zoom-in-95 duration-200">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-12 h-12 rounded-2xl bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/30 flex items-center justify-center font-bold text-xl">
+                    🗑️
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-gray-900 dark:text-white">
+                      Delete Unused Voucher Batch
+                    </h3>
+                    <p className="text-xs text-gray-400 font-mono mt-0.5">{batch.batchNumber}</p>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-rose-500/5 dark:bg-rose-500/[0.04] border border-rose-500/20 rounded-2xl space-y-2">
+                  <p className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed">
+                    Are you sure you want to permanently delete batch <strong className="font-mono text-gray-900 dark:text-white">{batch.batchNumber}</strong> (<strong className="font-mono">{totalCards.toLocaleString()} Cards</strong>)?
+                  </p>
+                  <p className="text-[11px] text-rose-600 dark:text-rose-400 font-semibold">
+                    ⚠️ This action will scrub all unredeemed scratch card records from your inventory ledger. This action cannot be undone.
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-2 border-t border-gray-100 dark:border-white/5">
+                  <button
+                    type="button"
+                    disabled={isDeleting}
+                    onClick={() => setDeleteModalOpen(false)}
+                    className="px-4 py-2.5 bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10 text-xs font-bold rounded-xl transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isDeleting}
+                    onClick={confirmDeleteBatch}
+                    className="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition shadow-lg shadow-rose-600/20 flex items-center gap-2"
+                  >
+                    {isDeleting ? (
+                      <>
+                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <span>Deleting Batch...</span>
+                      </>
+                    ) : (
+                      <span>Confirm &amp; Delete Batch</span>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
 
           <Link

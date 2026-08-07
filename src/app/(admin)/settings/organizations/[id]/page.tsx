@@ -22,11 +22,17 @@ export default function OrganizationDetail({ params }: PageProps) {
   const id = resolvedParams?.id;
 
   const { data: org, isLoading, isError, mutate } = useApi<any>(`/organizations/${id}`);
-  const { data: members, mutate: mutateMembers } = useApi<any[]>(`/organizations/${id}/members`);
-  const { data: consumers } = useApi<any[]>("/consumers");
-  const { data: regions } = useApi<any[]>("/locations/regions");
-  const { data: towns } = useApi<any[]>("/locations/towns");
-  const { data: salesHierarchy } = useApi<any[]>("/sales");
+  const { data: rawMembers, mutate: mutateMembers } = useApi<any>(`/organizations/${id}/members`);
+  const { data: rawConsumers } = useApi<any>("/consumers");
+  const { data: rawRegions } = useApi<any>("/locations/regions");
+  const { data: rawTowns } = useApi<any>("/locations/towns");
+  const { data: rawSales } = useApi<any>("/sales");
+
+  const members = Array.isArray(rawMembers) ? rawMembers : (rawMembers?.data || []);
+  const consumers = Array.isArray(rawConsumers) ? rawConsumers : (rawConsumers?.data || []);
+  const regions = Array.isArray(rawRegions) ? rawRegions : (rawRegions?.data || []);
+  const towns = Array.isArray(rawTowns) ? rawTowns : (rawTowns?.data || []);
+  const salesHierarchy = Array.isArray(rawSales) ? rawSales : (rawSales?.data || []);
 
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -41,7 +47,12 @@ export default function OrganizationDetail({ params }: PageProps) {
 
   useEffect(() => {
     if (org) {
-      setEditData(org);
+      setEditData({
+        ...org,
+        regionId: org.regionId || org.town?.regionId || "",
+        townId: org.townId || "",
+        salesPersonId: org.salesPersonId || "",
+      });
     }
   }, [org]);
 
@@ -65,15 +76,9 @@ export default function OrganizationDetail({ params }: PageProps) {
     setIsSaving(true);
     setError("");
 
-    if (!editData.name) { setError("Organization name is required"); setIsSaving(false); return; }
+    if (!editData.name?.trim()) { setError("Organization name is required"); setIsSaving(false); return; }
     if (editData.email && !/^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(editData.email)) {
       setError("Invalid email address format"); setIsSaving(false); return;
-    }
-    if (editData.taxId && editData.taxId.length > 20) {
-      setError("Tax ID is too long (max 20 characters)"); setIsSaving(false); return;
-    }
-    if (editData.registrationNumber && editData.registrationNumber.length > 30) {
-      setError("Registration number is too long (max 30 characters)"); setIsSaving(false); return;
     }
 
     try {
@@ -88,14 +93,16 @@ export default function OrganizationDetail({ params }: PageProps) {
           email: editData.email,
           addressLine1: editData.addressLine1,
           townId: editData.townId,
+          salesPersonId: editData.salesPersonId,
           isActive: editData.isActive,
         }),
       });
-      if (resData.success) {
+
+      if (resData) {
         setIsEditing(false);
         mutate();
       } else {
-        setError(resData.error || "Update failed");
+        setError("Update failed");
       }
     } catch (err: any) {
       const msg = err.info?.error || err.message || "Network error occurred";
@@ -114,13 +121,13 @@ export default function OrganizationDetail({ params }: PageProps) {
         method: "POST",
         body: JSON.stringify({ consumerId: selectedConsumerId, role: memberRole }),
       });
-      if (res.success) {
+      if (res) {
         mutateMembers();
         setSelectedConsumerId("");
         setMemberRole("WORKER");
         setShowAddMember(false);
       } else {
-        setError(res.error || "Failed to add member");
+        setError("Failed to add member");
       }
     } catch (err: any) {
       setError(err.message || "Network error");
@@ -135,10 +142,8 @@ export default function OrganizationDetail({ params }: PageProps) {
       const res = await authenticatedFetch(`/api/organizations/${id}/members/${memberId}`, {
         method: "DELETE",
       });
-      if (res.success) {
+      if (res) {
         mutateMembers();
-      } else {
-        alert(res.error || "Failed to remove member");
       }
     } catch (err: any) {
       alert(err.message || "Network error");
@@ -159,9 +164,14 @@ export default function OrganizationDetail({ params }: PageProps) {
     return type.charAt(0).toUpperCase() + type.slice(1).toLowerCase();
   };
 
-  const availableConsumers = consumers?.filter(
-    (c) => !members?.find((m) => m.consumer?.id === c.id)
-  ) || [];
+  const availableConsumers = consumers.filter(
+    (c: any) => !members.find((m: any) => m.consumer?.id === c.id)
+  );
+
+  const filteredTownOptions = towns.filter((t: any) => {
+    if (!editData.regionId) return true;
+    return t.regionId === editData.regionId;
+  }).map((t: any) => ({ value: t.id, label: t.name }));
 
   return (
     <div className="w-full space-y-6 animate-fadeIn pb-12">
@@ -259,9 +269,9 @@ export default function OrganizationDetail({ params }: PageProps) {
               <DetailItem label="Phone" value={org.phone} isEditing={isEditing} field="phone" data={editData} setData={setEditData} />
               <DetailItem label="Email" value={org.email} isEditing={isEditing} field="email" data={editData} setData={setEditData} />
               <DetailItem label="Address" value={org.addressLine1} isEditing={isEditing} field="addressLine1" data={editData} setData={setEditData} />
-              <DetailItem label="Region" value={org.region?.name} isEditing={isEditing} field="regionId" data={editData} setData={setEditData} type="select" options={regions?.map((r: any) => ({ value: r.id, label: r.name }))} />
-              <DetailItem label="Town" value={org.town?.name} isEditing={isEditing} field="townId" data={editData} setData={setEditData} type="select" options={towns?.map((t: any) => ({ value: t.id, label: t.name }))} />
-              <DetailItem label="Sales Person" value={org.salesStaff?.name} isEditing={isEditing} field="salesPersonId" data={editData} setData={setEditData} type="select" options={salesHierarchy?.map((s: any) => ({ value: s.id, label: `${s.name} (${s.role})` }))} />
+              <DetailItem label="Region" value={org.region?.name} isEditing={isEditing} field="regionId" data={editData} setData={setEditData} type="select" options={regions.map((r: any) => ({ value: r.id, label: r.name }))} />
+              <DetailItem label="Town" value={org.town?.name} isEditing={isEditing} field="townId" data={editData} setData={setEditData} type="select" options={filteredTownOptions} />
+              <DetailItem label="Sales Person" value={org.salesStaff?.name} isEditing={isEditing} field="salesPersonId" data={editData} setData={setEditData} type="select" options={salesHierarchy.map((s: any) => ({ value: s.id, label: `${s.name} (${s.role})` }))} />
             </div>
           </div>
 
@@ -270,7 +280,7 @@ export default function OrganizationDetail({ params }: PageProps) {
             <div className="border-b border-gray-100 px-6 py-4 dark:border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <h3 className="text-sm font-bold text-gray-900 dark:text-white">Organization Members</h3>
-                <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{members?.length || 0} members enrolled under this organization</p>
+                <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{members.length} members enrolled under this organization</p>
               </div>
               <button
                 onClick={() => setShowAddMember(!showAddMember)}
@@ -292,7 +302,7 @@ export default function OrganizationDetail({ params }: PageProps) {
                     <ModernSelect
                       options={availableConsumers.map((c: any) => ({
                         value: c.id,
-                        label: `${c.firstName} ${c.lastName} (${c.phoneNumber})`,
+                        label: `${c.firstName || "Consumer"} ${c.lastName || ""} (${c.phoneNumber || "No phone"})`,
                       }))}
                       value={selectedConsumerId}
                       onChange={setSelectedConsumerId}
@@ -325,7 +335,7 @@ export default function OrganizationDetail({ params }: PageProps) {
             )}
 
             <div className="w-full overflow-x-auto">
-              {members && members.length > 0 ? (
+              {members.length > 0 ? (
                 <Table className="w-full">
                   <TableHeader>
                     <TableRow className="bg-gray-50/50 dark:bg-white/[0.01]">
@@ -348,23 +358,23 @@ export default function OrganizationDetail({ params }: PageProps) {
                               <span className="text-xs font-bold text-gray-900 dark:text-white leading-tight">
                                 {m.consumer?.firstName} {m.consumer?.lastName}
                               </span>
-                              <span className="text-[11px] text-gray-400 mt-0.5">{m.consumer?.phoneNumber}</span>
+                              <span className="text-[11px] text-gray-400">{m.consumer?.phoneNumber}</span>
                             </div>
                           </div>
                         </TableCell>
                         <TableCell className="py-3.5 px-6">
-                          <Badge size="sm" color="light">{m.role?.charAt(0) + m.role?.slice(1).toLowerCase()}</Badge>
+                          <Badge color="light" size="sm">{m.role}</Badge>
                         </TableCell>
-                        <TableCell className="py-3.5 px-6 text-xs font-mono text-gray-500">
-                          {m.consumer?.loyaltyNumber || "—"}
+                        <TableCell className="py-3.5 px-6 font-mono text-xs text-gray-600 dark:text-gray-400">
+                          {m.consumer?.loyaltyNumber || "N/A"}
                         </TableCell>
-                        <TableCell className="py-3.5 px-6 text-xs text-gray-500 font-medium">
-                          {m.joinedAt ? new Date(m.joinedAt).toLocaleDateString() : "—"}
+                        <TableCell className="py-3.5 px-6 text-xs text-gray-500 dark:text-gray-400">
+                          {new Date(m.joinedAt).toLocaleDateString()}
                         </TableCell>
                         <TableCell className="py-3.5 px-6 text-right">
                           <button
                             onClick={() => handleRemoveMember(m.id)}
-                            className="text-xs font-semibold text-rose-600 hover:text-rose-700 transition"
+                            className="text-xs font-semibold text-rose-600 hover:text-rose-700 dark:text-rose-400 transition"
                           >
                             Remove
                           </button>
@@ -374,8 +384,8 @@ export default function OrganizationDetail({ params }: PageProps) {
                   </TableBody>
                 </Table>
               ) : (
-                <div className="py-12 text-center text-xs font-semibold text-gray-400 italic">
-                  No members currently enrolled under this organization.
+                <div className="py-12 text-center text-xs text-gray-400">
+                  No members currently enrolled. Click &quot;Add member&quot; above to assign workers or managers.
                 </div>
               )}
             </div>
@@ -393,7 +403,7 @@ export default function OrganizationDetail({ params }: PageProps) {
             <div className="p-6 space-y-3">
               <div className="p-3.5 rounded-xl bg-gray-50 dark:bg-white/[0.02] border border-gray-100 dark:border-white/5 flex items-center justify-between">
                 <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">Total Members</span>
-                <span className="text-lg font-bold text-gray-900 dark:text-white">{members?.length || 0}</span>
+                <span className="text-lg font-bold text-gray-900 dark:text-white">{members.length}</span>
               </div>
               <div className="p-3.5 rounded-xl bg-gray-50 dark:bg-white/[0.02] border border-gray-100 dark:border-white/5 flex items-center justify-between">
                 <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">Points Earned</span>

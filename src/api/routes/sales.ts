@@ -7,12 +7,12 @@ import { withScopedDb } from "../../db";
 const app = new Hono<{ Variables: { user: any } }>();
 
 const staffSchema = z.object({
-  name: z.string().min(1),
-  email: z.string().email().optional(),
-  phone: z.string().optional(),
+  name: z.string().min(1, "Name is required"),
+  email: z.string().optional().nullable().transform(v => (v && v.trim() ? v.trim() : undefined)),
+  phone: z.string().optional().nullable().transform(v => (v && v.trim() ? v.trim() : undefined)),
   role: z.enum(["SALES_PERSON", "ASM", "REGIONAL_MANAGER", "CEO"]),
-  managerId: z.string().uuid().optional(),
-  regionId: z.string().uuid().optional(),
+  managerId: z.string().optional().nullable().transform(v => (v && v.trim() ? v.trim() : undefined)),
+  regionId: z.string().optional().nullable().transform(v => (v && v.trim() ? v.trim() : undefined)),
 });
 
 app.post("/", zValidator("json", staffSchema), async (c) => {
@@ -54,16 +54,7 @@ app.get("/:id", async (c) => {
   }
 });
 
-const updateStaffSchema = z.object({
-  name: z.string().min(1).optional(),
-  email: z.string().email().optional(),
-  phone: z.string().optional(),
-  role: z.enum(["SALES_PERSON", "ASM", "REGIONAL_MANAGER", "CEO"]).optional(),
-  managerId: z.string().uuid().optional(),
-  regionId: z.string().uuid().optional(),
-});
-
-app.put("/:id", zValidator("json", updateStaffSchema), async (c) => {
+app.put("/:id", zValidator("json", staffSchema.partial()), async (c) => {
   const user = c.get("user");
   const id = c.req.param("id");
   const body = c.req.valid("json");
@@ -71,6 +62,20 @@ app.put("/:id", zValidator("json", updateStaffSchema), async (c) => {
   try {
     const result = await withScopedDb(user.userId, user.role || "authenticated", async (tx) => {
       return await SalesHierarchyService.updateStaff(id, user.tenantId, body, tx);
+    });
+    return c.json({ success: true, data: result });
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 400);
+  }
+});
+
+app.delete("/:id", async (c) => {
+  const user = c.get("user");
+  const id = c.req.param("id");
+
+  try {
+    const result = await withScopedDb(user.userId, user.role || "authenticated", async (tx) => {
+      return await SalesHierarchyService.deleteStaff(id, user.tenantId, tx);
     });
     return c.json({ success: true, data: result });
   } catch (error: any) {
@@ -112,4 +117,3 @@ app.get("/:id/assignments", async (c) => {
 });
 
 export default app;
-

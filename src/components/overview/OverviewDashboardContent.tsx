@@ -12,7 +12,13 @@ import TenantWalletEconomy from "@/components/overview/TenantWalletEconomy";
 import GeographicInsights from "@/components/overview/GeographicInsights";
 import ProductPerformance from "@/components/overview/ProductPerformance";
 
+import { useApi } from "@/hooks/useApi";
+
 export default function OverviewDashboardContent() {
+  const { data: stats, isLoading, mutate } = useApi("/loyalty/stats/overview", {
+    refreshInterval: 10000,
+  });
+
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState<string>(
     new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })
@@ -20,7 +26,7 @@ export default function OverviewDashboardContent() {
 
   const handleManualRefresh = () => {
     setIsRefreshing(true);
-    // Dispatch global event for SWR hooks
+    mutate();
     window.dispatchEvent(new Event("tuzohub_metrics_updated"));
     setTimeout(() => {
       setIsRefreshing(false);
@@ -102,21 +108,21 @@ export default function OverviewDashboardContent() {
 
           {/* TOP ROW: Core Metrics (Spans full 12 columns) */}
           <div className="col-span-12 min-w-0">
-            <OverviewMetrics />
+            <OverviewMetrics stats={stats} isLoading={isLoading} />
           </div>
 
           {/* NEW ROW: Voucher Pipeline & Logistics Breakdown */}
           <div className="col-span-12 min-w-0">
-            <VoucherPipelineWidget />
+            <VoucherPipelineWidget stats={stats} isLoading={isLoading} />
           </div>
 
           {/* SECOND ROW: 8-Column / 4-Column Split */}
           <div className="col-span-12 xl:col-span-8 min-w-0 flex flex-col h-full">
-            <CampaignPointsChart />
+            <CampaignPointsChart stats={stats} isLoading={isLoading} />
           </div>
 
           <div className="col-span-12 xl:col-span-4 min-w-0 flex flex-col h-full">
-            <TenantWalletEconomy />
+            <TenantWalletEconomy stats={stats} isLoading={isLoading} />
           </div>
 
           {/* THIRD ROW: Security & Audit + Active Campaigns */}
@@ -125,21 +131,21 @@ export default function OverviewDashboardContent() {
           </div>
 
           <div className="col-span-12 xl:col-span-7 min-w-0 flex flex-col h-full">
-            <ActiveCampaignsWidget />
+            <ActiveCampaignsWidget stats={stats} isLoading={isLoading} />
           </div>
 
           {/* FOURTH ROW: Product Performance & Pending Redemptions */}
           <div className="col-span-12 xl:col-span-7 min-w-0 flex flex-col h-full">
-            <ProductPerformance />
+            <ProductPerformance stats={stats} isLoading={isLoading} />
           </div>
 
           <div className="col-span-12 xl:col-span-5 min-w-0 flex flex-col h-full">
-            <GeographicInsights />
+            <GeographicInsights stats={stats} isLoading={isLoading} />
           </div>
 
           {/* BOTTOM ROW: Pending Queue Details */}
           <div className="col-span-12 min-w-0 flex flex-col h-full">
-            <PendingRedemptions />
+            <PendingRedemptions stats={stats} isLoading={isLoading} />
           </div>
 
         </div>

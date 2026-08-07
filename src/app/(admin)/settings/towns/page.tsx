@@ -23,12 +23,9 @@ export default function TownsPage() {
 
   const fetchTowns = async () => {
     try {
-      const { data, success, error: msg } = await authenticatedFetch("/api/locations/towns");
-      if (success) {
-        setTowns(data);
-      } else {
-        setError(typeof msg === "string" ? msg : JSON.stringify(msg));
-      }
+      const res = await authenticatedFetch("/api/locations/towns");
+      const list = Array.isArray(res) ? res : (res?.data || []);
+      setTowns(list);
     } catch (err: any) {
       setError(err.message || "Failed to fetch towns");
     } finally {

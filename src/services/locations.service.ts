@@ -1,6 +1,6 @@
 import { eq, and, isNull } from "drizzle-orm";
 import { db } from "../db";
-import { regions, towns, countries } from "../db/schema";
+import { regions, towns, countries, tenants } from "../db/schema";
 import { v4 as uuidv4 } from "uuid";
 
 export class LocationsService {
@@ -66,14 +66,32 @@ export class LocationsService {
     return records[0];
   }
 
-  static async createRegion(payload: { name: string; countryId: string; tenantId: string }, tx?: any) {
+  static async createRegion(payload: { name: string; countryId?: string; tenantId: string }, tx?: any) {
     const dbClient = tx || db;
+    let countryId = payload.countryId;
+    if (!countryId) {
+      const [tRow] = await dbClient.select({ countryId: tenants.countryId }).from(tenants).where(eq(tenants.id, payload.tenantId)).limit(1);
+      countryId = tRow?.countryId;
+    }
+    if (!countryId) {
+      const [cRow] = await dbClient.select({ id: countries.id }).from(countries).limit(1);
+      countryId = cRow?.id;
+    }
+    if (!countryId) {
+      const [createdCountry] = await dbClient.insert(countries).values({
+        name: "Kenya",
+        code: "KE",
+        currency: "KES",
+      }).returning();
+      countryId = createdCountry.id;
+    }
+
     const newRecord = await dbClient
       .insert(regions)
       .values({
         id: uuidv4(),
         tenantId: payload.tenantId,
-        countryId: payload.countryId,
+        countryId,
         name: payload.name,
       })
       .returning();

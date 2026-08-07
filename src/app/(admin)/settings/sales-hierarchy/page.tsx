@@ -24,12 +24,9 @@ export default function SalesHierarchyPage() {
 
   const fetchStaff = async () => {
     try {
-      const { data, success, error: msg } = await authenticatedFetch("/api/sales");
-      if (success) {
-        setStaff(data);
-      } else {
-        setError(typeof msg === "string" ? msg : JSON.stringify(msg));
-      }
+      const res = await authenticatedFetch("/api/sales");
+      const list = Array.isArray(res) ? res : (res?.data || []);
+      setStaff(list);
     } catch (err: any) {
       setError(err.message || "Failed to fetch hierarchy staff.");
     } finally {

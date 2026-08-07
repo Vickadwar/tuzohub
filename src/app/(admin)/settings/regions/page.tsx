@@ -23,12 +23,9 @@ export default function RegionsPage() {
 
   const fetchRegions = async () => {
     try {
-      const { data, success, error: msg } = await authenticatedFetch("/api/locations/regions");
-      if (success) {
-        setRegions(data);
-      } else {
-        setError(typeof msg === "string" ? msg : JSON.stringify(msg));
-      }
+      const res = await authenticatedFetch("/api/locations/regions");
+      const list = Array.isArray(res) ? res : (res?.data || []);
+      setRegions(list);
     } catch (err: any) {
       setError(err.message || "Failed to fetch regions");
     } finally {

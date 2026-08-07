@@ -1,11 +1,10 @@
 GAMMA RANGI NA CHAPAA - USSD WALKTHROUGH
-For submission to Africa's Talking
 
 =========================================================
 SCENARIO A: FIRST-TIME USER REGISTRATION (ENGLISH PATH)
 =========================================================
 Step 1: Language Selection
-* User Dials: *453*34#
+* User Dials: *617*85#
 * System Checks: Phone number not in the database.
 * Screen:
   CON Welcome to Gamma Rangi na Chapaa!
@@ -69,7 +68,7 @@ Step 8: Final Confirmation
 SCENARIO B: FIRST-TIME USER REGISTRATION (SWAHILI PATH)
 =========================================================
 Step 1: Language Selection
-* User Dials: *453*34#
+* User Dials: *617*85#
 * Screen:
   CON Welcome to Gamma Rangi na Chapaa!
   1. English
@@ -132,7 +131,7 @@ Step 8: Final Confirmation
 SCENARIO C: RETURNING USER (ALREADY REGISTERED)
 =========================================================
 Step 1: Main Menu
-* User Dials: *453*34#
+* User Dials: *617*85#
 * System Checks: Phone number exists in database.
 * Screen:
   CON Welcome back to Gamma, [Name]! / Karibu tena [Name]!

@@ -1,6 +1,6 @@
 import { db } from "../db";
 import { voucherBatches, vouchers, products, consumers, campaigns } from "../db/schema";
-import { eq, and, desc, count, ilike, or, sql } from "drizzle-orm";
+import { eq, and, desc, count, ilike, or, isNotNull, sql } from "drizzle-orm";
 import * as crypto from "crypto";
 import { AuditService } from "./audit.service";
 
@@ -63,17 +63,26 @@ export class VoucherService {
       });
     }
 
-    // Chunk DB inserts (500 rows per query) to avoid Postgres parameter limits & timeouts
-    const chunkSize = 500;
+    // Chunk DB inserts (1,000 rows per query) with progressive generated count updates
+    const chunkSize = 1000;
+    let createdCount = 0;
     for (let i = 0; i < voucherData.length; i += chunkSize) {
       const chunk = voucherData.slice(i, i + chunkSize);
-      await db.insert(vouchers).values(chunk);
+      await db.insert(vouchers).values(chunk).onConflictDoNothing();
+      createdCount += chunk.length;
+
+      // Update inventory generated count progressively
+      await db
+        .update(voucherBatches)
+        .set({ generated: createdCount })
+        .where(eq(voucherBatches.id, batch.id));
     }
 
-    await db
-      .update(voucherBatches)
-      .set({ generated: params.quantity })
-      .where(eq(voucherBatches.id, batch.id));
+    const [updatedBatch] = await db
+      .select()
+      .from(voucherBatches)
+      .where(eq(voucherBatches.id, batch.id))
+      .limit(1);
 
     await AuditService.logEvent({
       tenantId: params.tenantId,
@@ -88,9 +97,17 @@ export class VoucherService {
       },
     });
 
+    const exportRows = voucherData.map((v) => ({
+      serialNumber: v.serialNumber,
+      secureCode: this.generateDeterministicCode(secretKey, v.serialNumber),
+      batchNumber: cleanBatchRef,
+      productSku: "GENERIC",
+    }));
+
     return {
-      batch,
+      batch: updatedBatch || { ...batch, generated: createdCount },
       vouchersCount: voucherData.length,
+      exportRows,
     };
   }
 
@@ -127,10 +144,6 @@ export class VoucherService {
 
     const meta = (batch.metadata as any) || {};
     const batchStatus = (batch as any).isActivated ? "ACTIVE" : (meta.status || "GENERATED");
-
-    if (batchStatus !== "GENERATED") {
-      throw new Error("CSV manifest download is restricted. Scratch card datasets can only be exported while the batch is in GENERATED status.");
-    }
 
     const cardRows = await db
       .select({
@@ -203,17 +216,35 @@ export class VoucherService {
 
     const total = totalResult[0]?.total ?? 0;
 
-    return {
-      data: rows.map((r) => {
+    const data = await Promise.all(
+      rows.map(async (r) => {
         const meta = (r.metadata as any) || {};
+        const [allocatedRes] = await db
+          .select({ count: count() })
+          .from(vouchers)
+          .where(and(eq(vouchers.batchId, r.id), isNotNull(vouchers.productBatchId)));
+
+        const allocatedCount = allocatedRes?.count || 0;
+        const originalQuantity = r.quantity || 0;
+        const remainingBalance = Math.max(0, originalQuantity - allocatedCount);
+
         return {
           ...r,
           batchType: meta.batchType || (r.productId ? "PRODUCT_SPECIFIC" : "VALUE_BASED"),
           rewardDenomination: meta.rewardDenomination || "50.00",
           rewardType: meta.rewardType || "MOBILE_MONEY",
           status: r.isActivated ? "ACTIVE" : meta.status || "PRINTED",
+          originalQuantity,
+          allocatedCount,
+          consumedCount: allocatedCount,
+          remainingBalance,
+          unallocatedCount: remainingBalance,
         };
-      }),
+      })
+    );
+
+    return {
+      data,
       pagination: { total, page, limit },
     };
   }
@@ -347,7 +378,26 @@ export class VoucherService {
 
     const filterConditions = [eq(voucherBatches.tenantId, tenantId)];
     if (batchId) filterConditions.push(eq(vouchers.batchId, batchId));
-    if (status) filterConditions.push(eq(vouchers.status, status as any));
+    if (status) {
+      const upperStatus = status.toUpperCase().trim();
+      if (upperStatus === "IN_STOCK") {
+        filterConditions.push(
+          or(
+            sql`(${voucherBatches.metadata}->>'status' = 'IN_STOCK')`,
+            eq(vouchers.status, "IN_TRANSIT" as any)
+          )!
+        );
+      } else if (upperStatus === "ACTIVE") {
+        filterConditions.push(
+          or(
+            eq(vouchers.status, "ACTIVE" as any),
+            eq(voucherBatches.isActivated, true)
+          )!
+        );
+      } else if (["PRINTED", "IN_TRANSIT", "REDEEMED", "CANCELLED", "EXPIRED"].includes(upperStatus)) {
+        filterConditions.push(eq(vouchers.status, upperStatus as any));
+      }
+    }
     const where = and(...filterConditions);
 
     const [rows, totalResult] = await Promise.all([
@@ -362,8 +412,12 @@ export class VoucherService {
           batchNumber: voucherBatches.batchNumber,
           isActivated: voucherBatches.isActivated,
           batchMetadata: voucherBatches.metadata,
+          productId: voucherBatches.productId,
           productName: products.name,
+          productPointsPerUnit: products.pointsPerUnit,
+          campaignId: voucherBatches.campaignId,
           campaignName: campaigns.name,
+          campaignPointsMultiplier: campaigns.pointsMultiplier,
         })
         .from(vouchers)
         .innerJoin(voucherBatches, eq(vouchers.batchId, voucherBatches.id))
@@ -384,11 +438,24 @@ export class VoucherService {
       const meta = (r.batchMetadata as any) || {};
       const batchStatus = r.isActivated ? "ACTIVE" : (meta.status || "PRINTED");
       const effectiveStatus = (r.status === "REDEEMED" || r.status === "ACTIVE") ? r.status : batchStatus;
+
+      const basePoints = r.productPointsPerUnit !== null && r.productPointsPerUnit !== undefined
+        ? parseFloat(String(r.productPointsPerUnit))
+        : (parseFloat(String(meta.rewardDenomination || "50.00")) || 50.00);
+
+      const multiplier = r.campaignPointsMultiplier !== null && r.campaignPointsMultiplier !== undefined
+        ? parseFloat(String(r.campaignPointsMultiplier))
+        : 1.0;
+
+      const rewardDenomination = (basePoints * multiplier).toFixed(2);
+
       return {
         ...r,
         status: effectiveStatus,
         effectiveStatus,
-        rewardDenomination: meta.rewardDenomination || "50.00",
+        basePoints,
+        campaignMultiplier: multiplier,
+        rewardDenomination,
         rewardType: meta.rewardType || "MOBILE_MONEY",
         batchType: meta.batchType || (r.productName ? "PRODUCT_SPECIFIC" : "VALUE_BASED"),
       };
@@ -420,8 +487,10 @@ export class VoucherService {
         productId: voucherBatches.productId,
         productName: products.name,
         productSku: products.sku,
+        productPointsPerUnit: products.pointsPerUnit,
         campaignId: voucherBatches.campaignId,
         campaignName: campaigns.name,
+        campaignPointsMultiplier: campaigns.pointsMultiplier,
         consumerFirstName: consumers.firstName,
         consumerLastName: consumers.lastName,
         consumerPhone: consumers.phoneNumber,
@@ -458,9 +527,22 @@ export class VoucherService {
       const meta = (voucherData.batchMetadata as any) || {};
       const batchStatus = voucherData.isActivated ? "ACTIVE" : (meta.status || "PRINTED");
       const effectiveStatus = (voucherData.status === "REDEEMED" || voucherData.status === "ACTIVE") ? voucherData.status : batchStatus;
+
+      const basePoints = voucherData.productPointsPerUnit !== null && voucherData.productPointsPerUnit !== undefined
+        ? parseFloat(String(voucherData.productPointsPerUnit))
+        : (parseFloat(String(meta.rewardDenomination || "50.00")) || 50.00);
+
+      const multiplier = voucherData.campaignPointsMultiplier !== null && voucherData.campaignPointsMultiplier !== undefined
+        ? parseFloat(String(voucherData.campaignPointsMultiplier))
+        : 1.0;
+
+      const rewardDenomination = (basePoints * multiplier).toFixed(2);
+
       (voucherData as any).status = effectiveStatus;
       (voucherData as any).effectiveStatus = effectiveStatus;
-      (voucherData as any).rewardDenomination = meta.rewardDenomination || "50.00";
+      (voucherData as any).basePoints = basePoints;
+      (voucherData as any).campaignMultiplier = multiplier;
+      (voucherData as any).rewardDenomination = rewardDenomination;
       (voucherData as any).rewardType = meta.rewardType || "MOBILE_MONEY";
       (voucherData as any).batchType = meta.batchType || (voucherData.productId ? "PRODUCT_SPECIFIC" : "VALUE_BASED");
     }
@@ -553,6 +635,52 @@ export class VoucherService {
     });
 
     return batch;
+  }
+
+  /**
+   * Deletes an unutilized voucher batch if no vouchers have been redeemed.
+   */
+  static async deleteBatch(id: string, tenantId: string, userId?: string) {
+    const [batch] = await db
+      .select()
+      .from(voucherBatches)
+      .where(and(eq(voucherBatches.id, id), eq(voucherBatches.tenantId, tenantId)))
+      .limit(1);
+
+    if (!batch) throw new Error("Voucher batch not found or unauthorized");
+
+    // Check if any vouchers in this batch have been redeemed or claimed
+    const [redeemedCountResult] = await db
+      .select({ count: count() })
+      .from(vouchers)
+      .where(and(eq(vouchers.batchId, id), eq(vouchers.status, "REDEEMED" as any)));
+
+    const redeemedCount = redeemedCountResult?.count || 0;
+    if (redeemedCount > 0) {
+      throw new Error(
+        `Cannot delete batch "${batch.batchNumber}" because ${redeemedCount} card(s) have already been redeemed by consumers.`
+      );
+    }
+
+    // Delete associated vouchers first
+    await db.delete(vouchers).where(eq(vouchers.batchId, id));
+
+    // Delete the batch record
+    const [deletedBatch] = await db
+      .delete(voucherBatches)
+      .where(and(eq(voucherBatches.id, id), eq(voucherBatches.tenantId, tenantId)))
+      .returning();
+
+    await AuditService.logEvent({
+      tenantId,
+      userId,
+      action: "VOUCHER_BATCH_DELETED",
+      entityType: "voucher_batch",
+      entityId: id,
+      newData: { batchNumber: batch.batchNumber, quantity: batch.quantity },
+    });
+
+    return deletedBatch;
   }
 
   // --- Private Helpers ---

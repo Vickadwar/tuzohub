@@ -7,6 +7,7 @@ import { authenticatedFetch } from "@/hooks/useApi";
 
 // Premium UI Components
 import DatePicker from "@/components/ui/DatePicker";
+import ModernSelect from "@/components/ui/ModernSelect";
 
 // ─── Blueprint Interface & Options ───────────────────────────────────────────
 interface BlueprintOption {
@@ -15,7 +16,7 @@ interface BlueprintOption {
   badge: string;
   description: string;
   icon: React.ReactNode;
-  fulfillmentMode: "POINTS_ACCUMULATION" | "INSTANT_PAYOUT" | "VOUCHER_GENERATE";
+  fulfillmentMode: "POINTS_ACCUMULATION" | "INSTANT_PAYOUT" | "VOUCHER_GENERATE" | "HYBRID";
   payoutRewardType: "MOBILE_MONEY" | "AIRTIME" | "CATALOG_POINTS" | "SHOPPING_VOUCHER";
   defaultValuationStrategy: "PRODUCT_BASE_MULTIPLIER" | "FLAT_FIXED_REWARD";
   defaultMultiplier: string;
@@ -118,9 +119,11 @@ export default function EnterpriseCampaignWizard() {
   const [highestStepReached, setHighestStepReached] = useState(1);
   const [selectedBlueprint, setSelectedBlueprint] = useState<string>("INSTANT_MPESA");
 
-  // Real Master Catalog State
+  // Real Master Catalog State from Database
   const [tenantChannels, setTenantChannels] = useState<ChannelConfig[]>([]);
   const [masterProducts, setMasterProducts] = useState<ProductItem[]>([]);
+  const [tenantCategories, setTenantCategories] = useState<string[]>([]);
+  const [tenantUoms, setTenantUoms] = useState<string[]>([]);
   const [loadingMasterData, setLoadingMasterData] = useState(false);
 
   // Form State
@@ -134,7 +137,7 @@ export default function EnterpriseCampaignWizard() {
     isRecurring: false,
     // Valuation & Rules
     valuationStrategy: "PRODUCT_BASE_MULTIPLIER" as "PRODUCT_BASE_MULTIPLIER" | "FLAT_FIXED_REWARD",
-    fulfillmentMode: "INSTANT_PAYOUT" as "POINTS_ACCUMULATION" | "INSTANT_PAYOUT" | "VOUCHER_GENERATE",
+    fulfillmentMode: "INSTANT_PAYOUT" as "POINTS_ACCUMULATION" | "INSTANT_PAYOUT" | "VOUCHER_GENERATE" | "HYBRID",
     payoutRewardType: "MOBILE_MONEY" as "MOBILE_MONEY" | "AIRTIME" | "CATALOG_POINTS" | "SHOPPING_VOUCHER",
     instantCashAmount: 100,
     pointsPerScan: 50,
@@ -164,36 +167,51 @@ export default function EnterpriseCampaignWizard() {
 
   const activeBlueprint = BLUEPRINTS.find((b) => b.id === selectedBlueprint) || BLUEPRINTS[0];
 
-  // Fetch real channels & catalog products from database on mount
+  // Fetch real channels, catalog products, and tenant defined Categories & UoMs from database on mount
   useEffect(() => {
     async function loadMasterData() {
       setLoadingMasterData(true);
       try {
-        const [chanRes, prodRes] = await Promise.all([
+        const [chanRes, prodRes, metaRes] = await Promise.all([
           authenticatedFetch("/api/tenants/channels").catch(() => null),
           authenticatedFetch("/api/products?limit=200").catch(() => null),
+          authenticatedFetch("/api/products/meta/categories-uom").catch(() => null),
         ]);
 
-        if (chanRes && chanRes.ok) {
-          const json = await chanRes.json();
-          if (json.success && Array.isArray(json.data)) {
-            setTenantChannels(json.data);
+        if (chanRes) {
+          const channels = Array.isArray(chanRes) ? chanRes : Array.isArray(chanRes.data) ? chanRes.data : [];
+          setTenantChannels(channels);
+        }
+
+        if (metaRes) {
+          const meta = metaRes.data || metaRes;
+          if (Array.isArray(meta.categories)) {
+            setTenantCategories(meta.categories.map((c: any) => typeof c === "string" ? c : c.name));
+          }
+          if (Array.isArray(meta.uoms)) {
+            setTenantUoms(meta.uoms.map((u: any) => typeof u === "string" ? u : u.name));
           }
         }
 
-        if (prodRes && prodRes.ok) {
-          const json = await prodRes.json();
-          if (json.success && Array.isArray(json.data)) {
-            setMasterProducts(json.data);
-            // Default select all catalog items initially
-            setFormData((prev) => ({
-              ...prev,
-              selectedProductIds: json.data.map((p: any) => p.id),
-            }));
-          }
+        if (prodRes) {
+          const items: ProductItem[] = Array.isArray(prodRes)
+            ? prodRes
+            : Array.isArray(prodRes.data)
+            ? prodRes.data
+            : Array.isArray(prodRes.items)
+            ? prodRes.items
+            : Array.isArray(prodRes.data?.items)
+            ? prodRes.data.items
+            : [];
+
+          setMasterProducts(items);
+          setFormData((prev) => ({
+            ...prev,
+            selectedProductIds: items.map((p) => p.id),
+          }));
         }
       } catch (err) {
-        console.warn("Could not load master channels/products", err);
+        console.warn("Could not load master channels/products from database", err);
       } finally {
         setLoadingMasterData(false);
       }
@@ -335,9 +353,12 @@ export default function EnterpriseCampaignWizard() {
     setIsPickerOpen(false);
   };
 
-  // Dynamic Filtering for Catalog Picker Modal
+  // Dynamic Filtering for Catalog Picker & Inline Filter using DB Tenant Settings
   const uniqueCategories = Array.from(
-    new Set(masterProducts.map((p) => p.category).filter(Boolean))
+    new Set([
+      ...tenantCategories,
+      ...(masterProducts.map((p) => p.category).filter(Boolean) as string[]),
+    ])
   );
 
   const filteredMasterProducts = masterProducts.filter((p) => {
@@ -358,10 +379,16 @@ export default function EnterpriseCampaignWizard() {
     setStepError("");
 
     try {
+      const modeMap = formData.fulfillmentMode === "INSTANT_PAYOUT" ? "INSTANT" : formData.fulfillmentMode === "HYBRID" ? "HYBRID" : "ACCUMULATION";
+      const rewardMap = formData.payoutRewardType === "AIRTIME" ? "AIRTIME" : formData.payoutRewardType === "SHOPPING_VOUCHER" ? "SHOPPING_VOUCHER" : "CASHBACK";
+
       const payload = {
         name: formData.name,
         description: formData.description,
         campaignType: formData.campaignType,
+        fulfillmentMode: modeMap,
+        instantRewardType: rewardMap,
+        instantValue: formData.instantCashAmount,
         pointsMultiplier: formData.pointsMultiplier,
         startDate: formData.startDate,
         endDate: formData.endDate || undefined,
@@ -393,12 +420,10 @@ export default function EnterpriseCampaignWizard() {
         body: JSON.stringify(payload),
       });
 
-      const data = await res.json().catch(() => res);
-
-      if (data.success || res.ok) {
+      if (res) {
         router.push("/campaigns");
       } else {
-        setStepError(data.error || "Failed to launch campaign.");
+        setStepError("Failed to launch campaign.");
       }
     } catch (err: any) {
       setStepError(err.message || "Network error occurred.");
@@ -559,11 +584,12 @@ export default function EnterpriseCampaignWizard() {
           {/* STEP 1: Campaign Blueprint & Basic Details */}
           {currentStep === 1 && (
             <div className="space-y-6">
+              {/* Single Authoritative Campaign Blueprint & Delivery Model Selector */}
               <div className="bg-white dark:bg-white/[0.02] border border-gray-200/80 dark:border-white/[0.06] p-6 rounded-2xl shadow-sm space-y-4">
                 <div>
-                  <h2 className="text-sm font-bold text-gray-900 dark:text-white">1. Select Campaign Blueprint Model</h2>
+                  <h2 className="text-sm font-bold text-gray-900 dark:text-white">1. Select Campaign Blueprint &amp; Reward Delivery Model</h2>
                   <p className="text-xs text-gray-400 mt-0.5">
-                    Select how customer transactions, scratch code scans, or POS receipts trigger rewards.
+                    Select a pre-configured reward delivery blueprint. This automatically configures your campaign's fulfillment strategy, reward instrument, and default payout rules.
                   </p>
                 </div>
 
@@ -598,8 +624,24 @@ export default function EnterpriseCampaignWizard() {
                     );
                   })}
                 </div>
+
+                {/* Active Strategy Summary Banner */}
+                <div className="p-4 rounded-xl bg-brand-500/10 border border-brand-500/20 text-xs flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <div>
+                      <span className="font-bold text-brand-600 dark:text-brand-400">Active Delivery Strategy: </span>
+                      <span className="font-semibold text-gray-900 dark:text-white">{activeBlueprint.title}</span>
+                      <span className="text-gray-500 dark:text-gray-400 ml-1">({formData.fulfillmentMode === "INSTANT_PAYOUT" ? "Instant Real-Time Payout" : formData.fulfillmentMode === "HYBRID" ? "Hybrid Cash + Points" : "Points Accumulation & Catalog Banking"})</span>
+                    </div>
+                  </div>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-white dark:bg-white/10 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-white/10">
+                    Auto-Configured
+                  </span>
+                </div>
               </div>
 
+              {/* Campaign Basic Information */}
               <div className="bg-white dark:bg-white/[0.02] border border-gray-200/80 dark:border-white/[0.06] p-6 rounded-2xl shadow-sm space-y-4">
                 <h2 className="text-sm font-bold text-gray-900 dark:text-white">Campaign Basic Information</h2>
                 <div className="space-y-4">
@@ -635,6 +677,63 @@ export default function EnterpriseCampaignWizard() {
           {/* STEP 2: Products Selection via Catalog Picker Modal & Custom Multipliers */}
           {currentStep === 2 && (
             <div className="space-y-6">
+
+              {/* Campaign Schedule & Duration Card */}
+              <div className="bg-white dark:bg-white/[0.02] border border-gray-200/80 dark:border-white/[0.06] p-6 rounded-2xl shadow-sm space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-sm font-bold text-gray-900 dark:text-white">Campaign Schedule &amp; Expiry</h2>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      Configure campaign start and end dates. Leave End Date blank for an indefinite campaign.
+                    </p>
+                  </div>
+                  {!formData.endDate ? (
+                    <span className="px-3 py-1 rounded-full text-xs font-bold font-mono bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                      ♾️ Indefinite (Ongoing) Campaign
+                    </span>
+                  ) : (
+                    <span className="px-3 py-1 rounded-full text-xs font-bold font-mono bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                      📅 Fixed Expiry: {formData.endDate}
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-semibold text-gray-700 dark:text-gray-300 block mb-1">
+                      Launch Start Date *
+                    </label>
+                    <DatePicker
+                      value={formData.startDate}
+                      onChange={(val) => setFormData({ ...formData, startDate: val })}
+                      placeholder="Select start date"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                        Campaign End Date (Optional)
+                      </label>
+                      {formData.endDate && (
+                        <button
+                          type="button"
+                          onClick={() => setFormData({ ...formData, endDate: "" })}
+                          className="text-[10px] text-rose-500 hover:underline font-bold"
+                        >
+                          Clear (Make Indefinite)
+                        </button>
+                      )}
+                    </div>
+                    <DatePicker
+                      value={formData.endDate}
+                      onChange={(val) => setFormData({ ...formData, endDate: val })}
+                      placeholder="Leave blank for indefinite ongoing campaign"
+                    />
+                  </div>
+                </div>
+              </div>
 
               {/* Valuation Strategy & Unconstrained Multiplier Input */}
               <div className="bg-white dark:bg-white/[0.02] border border-gray-200/80 dark:border-white/[0.06] p-6 rounded-2xl shadow-sm space-y-4">
@@ -718,72 +817,126 @@ export default function EnterpriseCampaignWizard() {
                 </div>
               </div>
 
-              {/* Campaign Linked Products Table + Open Catalog Picker Button */}
+              {/* Direct Master Catalog Selection Table on the Page */}
               <div className="bg-white dark:bg-white/[0.02] border border-gray-200/80 dark:border-white/[0.06] p-6 rounded-2xl shadow-sm space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <div>
                     <div className="flex items-center gap-2">
                       <h2 className="text-sm font-bold text-gray-900 dark:text-white">
-                        Campaign Included Products
+                        Select Products from Master Catalog
                       </h2>
                       <span className="px-2 py-0.5 rounded-full bg-brand-500/10 text-brand-600 dark:text-brand-400 text-xs font-mono font-bold">
-                        {linkedProductsList.length} Selected
+                        {formData.selectedProductIds.length} of {masterProducts.length} Selected
                       </span>
                     </div>
                     <p className="text-xs text-gray-400 mt-0.5">
-                      Select existing items from your catalog to include in this campaign.
+                      Check products below to include them in this reward campaign. Showing default top items + instant search.
                     </p>
                   </div>
 
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={openProductPicker}
-                      className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold transition shadow-sm flex items-center gap-1.5"
+                      onClick={() => setFormData({ ...formData, selectedProductIds: masterProducts.map(p => p.id) })}
+                      className="px-3 py-1.5 bg-brand-500/10 hover:bg-brand-500/20 text-brand-600 dark:text-brand-400 rounded-lg text-xs font-bold transition"
                     >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                      </svg>
-                      Select Products from Catalog
+                      Select All
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, selectedProductIds: [] })}
+                      className="px-3 py-1.5 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 text-gray-600 dark:text-gray-400 rounded-lg text-xs font-bold transition"
+                    >
+                      Deselect All
                     </button>
                   </div>
                 </div>
 
-                {linkedProductsList.length === 0 ? (
-                  <div className="p-8 text-center border border-dashed border-gray-200 dark:border-white/10 rounded-xl space-y-2">
-                    <p className="text-xs text-gray-400">No products currently added to campaign.</p>
-                    <button
-                      type="button"
-                      onClick={openProductPicker}
-                      className="px-4 py-2 bg-brand-500/10 text-brand-600 dark:text-brand-400 rounded-lg text-xs font-bold"
-                    >
-                      + Browse Catalog Items
-                    </button>
+                {/* Inline Search & Category ModernSelect Controls */}
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 pt-2">
+                  <div className="sm:col-span-8">
+                    <input
+                      type="text"
+                      placeholder="Search catalog products by name, SKU, or category..."
+                      value={pickerSearch}
+                      onChange={(e) => setPickerSearch(e.target.value)}
+                      className="w-full px-3.5 py-2 bg-gray-50 dark:bg-white/[0.03] border border-gray-200 dark:border-white/10 rounded-xl text-xs font-medium text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500/40"
+                    />
                   </div>
-                ) : (
-                  <div className="overflow-x-auto border border-gray-200/80 dark:border-white/10 rounded-xl">
-                    <table className="w-full text-left border-collapse text-xs">
-                      <thead>
-                        <tr className="bg-gray-50 dark:bg-white/[0.03] border-b border-gray-200/80 dark:border-white/10 text-gray-500 dark:text-gray-400 font-semibold uppercase tracking-wider">
-                          <th className="p-3">Product Name</th>
-                          <th className="p-3">SKU / Code</th>
-                          <th className="p-3">Category</th>
-                          <th className="p-3 text-right">Base Value</th>
-                          <th className="p-3 text-right font-bold text-brand-600 dark:text-brand-400">
-                            Calculated Reward ({formData.pointsMultiplier}x)
-                          </th>
-                          <th className="p-3 text-center">Action</th>
+                  <div className="sm:col-span-4">
+                    <ModernSelect
+                      options={[
+                        { value: "ALL", label: "All Categories" },
+                        ...uniqueCategories.map((cat) => ({
+                          value: String(cat),
+                          label: String(cat),
+                        })),
+                      ]}
+                      value={pickerCategory}
+                      onChange={(val) => setPickerCategory(val)}
+                      placeholder="Filter Category"
+                    />
+                  </div>
+                </div>
+
+                {/* Direct Product Table List */}
+                <div className="overflow-x-auto border border-gray-200/80 dark:border-white/10 rounded-xl">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-gray-50 dark:bg-white/[0.03] border-b border-gray-200/80 dark:border-white/10 text-gray-500 dark:text-gray-400 font-semibold uppercase tracking-wider">
+                        <th className="p-3 w-10 text-center">Include</th>
+                        <th className="p-3">Product Name</th>
+                        <th className="p-3">SKU / Code</th>
+                        <th className="p-3">Category</th>
+                        <th className="p-3 text-right">Base Value</th>
+                        <th className="p-3 text-right font-bold text-brand-600 dark:text-brand-400">
+                          Calculated Payout ({formData.pointsMultiplier}x)
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 dark:divide-white/5">
+                      {filteredMasterProducts.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="p-8 text-center text-gray-400 text-xs font-semibold">
+                            No catalog products match your search or filter.
+                          </td>
                         </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100 dark:divide-white/5">
-                        {linkedProductsList.map((prod) => {
+                      ) : (
+                        filteredMasterProducts.map((prod: ProductItem) => {
+                          const isChecked = formData.selectedProductIds.includes(prod.id);
                           const basePoints = Number(prod.pointsPerUnit || 0);
                           const calculatedPayout = formData.valuationStrategy === "PRODUCT_BASE_MULTIPLIER"
                             ? basePoints * multiplierFactor
                             : formData.instantCashAmount;
 
                           return (
-                            <tr key={prod.id} className="hover:bg-gray-50/80 dark:hover:bg-white/[0.02] transition">
+                            <tr
+                              key={prod.id}
+                              onClick={() => {
+                                setFormData((prev) => {
+                                  const exists = prev.selectedProductIds.includes(prod.id);
+                                  return {
+                                    ...prev,
+                                    selectedProductIds: exists
+                                      ? prev.selectedProductIds.filter((id) => id !== prod.id)
+                                      : [...prev.selectedProductIds, prod.id],
+                                  };
+                                });
+                              }}
+                              className={`cursor-pointer transition ${
+                                isChecked
+                                  ? "bg-brand-500/5 dark:bg-brand-500/10 font-medium text-gray-900 dark:text-white"
+                                  : "hover:bg-gray-50/80 dark:hover:bg-white/[0.02] text-gray-600 dark:text-gray-400"
+                              }`}
+                            >
+                              <td className="p-3 text-center">
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={() => {}} // Handled by tr onClick
+                                  className="w-4 h-4 rounded text-brand-600 focus:ring-brand-500 border-gray-300 dark:border-white/20"
+                                />
+                              </td>
                               <td className="p-3 font-semibold text-gray-900 dark:text-white">
                                 {prod.name}
                               </td>
@@ -803,23 +956,13 @@ export default function EnterpriseCampaignWizard() {
                                   ? `KES ${calculatedPayout.toLocaleString()} Cash`
                                   : `${calculatedPayout.toLocaleString()} PTS`}
                               </td>
-                              <td className="p-3 text-center">
-                                <button
-                                  type="button"
-                                  onClick={() => handleRemoveProductFromCampaign(prod.id)}
-                                  className="text-rose-500 hover:text-rose-700 text-xs font-bold"
-                                  title="Remove from campaign"
-                                >
-                                  Remove
-                                </button>
-                              </td>
                             </tr>
                           );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
 
               {/* Broad Prerequisites & Eligibility Criteria */}

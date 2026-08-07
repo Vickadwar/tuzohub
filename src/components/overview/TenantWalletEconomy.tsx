@@ -9,8 +9,15 @@ const ReactApexChart = dynamic(() => import("react-apexcharts"), {
   ssr: false,
 });
 
-export default function TenantWalletEconomy() {
-  const { data: stats, isLoading } = useApi("/loyalty/stats/overview");
+interface TenantWalletEconomyProps {
+  stats?: any;
+  isLoading?: boolean;
+}
+
+export default function TenantWalletEconomy({ stats: propStats, isLoading: propIsLoading }: TenantWalletEconomyProps = {}) {
+  const { data: apiStats, isLoading: apiIsLoading } = useApi(propStats ? null : "/loyalty/stats/overview");
+  const stats = propStats || apiStats;
+  const isLoading = propIsLoading !== undefined ? propIsLoading : apiIsLoading;
 
   const economy = stats?.walletEconomy || {
     totalCirculation: "0",

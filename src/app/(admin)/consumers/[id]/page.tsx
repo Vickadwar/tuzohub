@@ -324,8 +324,14 @@ export default function ConsumerDetail({ params }: PageProps) {
         {[
           { id: "overview", label: "Overview & Telemetry" },
           { id: "identity", label: "Identity & Profile" },
-          { id: "limits", label: "Redemption & Banking Caps" },
-          { id: "permissions", label: "Capabilities & Security" },
+          { 
+            id: "limits", 
+            label: rewardTerms.rewardMode === "INSTANT_CASHBACK" ? "Cashout & Payout Caps" : "Redemption & Banking Caps" 
+          },
+          { 
+            id: "permissions", 
+            label: rewardTerms.rewardMode === "INSTANT_CASHBACK" ? "Cashout Privileges & Security" : "Capabilities & Security" 
+          },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -356,11 +362,17 @@ export default function ConsumerDetail({ params }: PageProps) {
               </div>
               <div className="mt-4">
                 <p className="text-3xl font-bold font-mono tracking-tight text-white">
-                  {Number(wallet?.pointsBalance || 0).toLocaleString()} <span className="text-xs font-normal text-gray-400">{rewardTerms.unitLabel}</span>
+                  {rewardTerms.rewardMode === "INSTANT_CASHBACK" || rewardTerms.unitLabel === "KES" ? "KES " : ""}
+                  {Number(wallet?.pointsBalance || 0).toLocaleString()}
+                  {rewardTerms.rewardMode !== "INSTANT_CASHBACK" && rewardTerms.unitLabel !== "KES" && (
+                    <span className="text-xs font-normal text-gray-400"> {rewardTerms.unitLabel}</span>
+                  )}
                 </p>
-                <p className="mt-1 text-xs text-gray-400">
-                  Est. cash value: <span className="font-bold font-mono text-emerald-400">KES {Number(wallet?.pointsBalance || 0).toLocaleString()}</span>
-                </p>
+                {rewardTerms.rewardMode !== "INSTANT_CASHBACK" && rewardTerms.unitLabel !== "KES" && (
+                  <p className="mt-1 text-xs text-gray-400">
+                    Est. cash value: <span className="font-bold font-mono text-emerald-400">KES {Number(wallet?.pointsBalance || 0).toLocaleString()}</span>
+                  </p>
+                )}
               </div>
               {parseFloat(wallet?.bankedPointsBalance || "0") > 0 && (
                 <div className="mt-4 inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/10 text-xs font-semibold text-brand-300 border border-white/10 w-fit">
@@ -425,7 +437,7 @@ export default function ConsumerDetail({ params }: PageProps) {
                       <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400">Timestamp</TableCell>
                       <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400">Product / Activity</TableCell>
                       <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400">Channel</TableCell>
-                      <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400 text-right">Points</TableCell>
+                      <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400 text-right">Value ({rewardTerms.unitLabel})</TableCell>
                       <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400">Status</TableCell>
                       <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400 text-right">Inspect</TableCell>
                     </TableRow>
@@ -579,6 +591,46 @@ export default function ConsumerDetail({ params }: PageProps) {
               </p>
             </div>
 
+            {/* USSD Telco & Shortcode Governance Card */}
+            <div className="bg-white dark:bg-white/[0.02] border border-gray-200/80 dark:border-white/[0.06] p-6 rounded-2xl shadow-sm space-y-4">
+              <div className="flex items-center justify-between border-b border-gray-100 dark:border-white/5 pb-3">
+                <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400">USSD &amp; Shortcode Governance</h3>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-gray-300">
+                  Tenant Bound
+                </span>
+              </div>
+              <div className="space-y-3 text-xs">
+                <div className="flex justify-between items-center p-2.5 rounded-xl bg-gray-50/50 dark:bg-white/[0.01]">
+                  <span className="font-medium text-gray-500">Primary USSD Shortcode</span>
+                  <span className="font-mono font-bold text-brand-600 dark:text-brand-400">
+                    {dashboard?.tenantSettings?.primaryShortcode || dashboard?.tenantSettings?.credentials?.ussdServiceCode || "*617*85#"}
+                  </span>
+                </div>
+                {dashboard?.tenantSettings?.sharedSubPrefix && (
+                  <div className="flex justify-between items-center p-2.5 rounded-xl bg-gray-50/50 dark:bg-white/[0.01]">
+                    <span className="font-medium text-gray-500">Shared Sub-Prefix</span>
+                    <span className="font-mono font-bold text-gray-900 dark:text-white">
+                      {dashboard.tenantSettings.sharedSubPrefix}
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center p-2.5 rounded-xl bg-gray-50/50 dark:bg-white/[0.01]">
+                  <span className="font-medium text-gray-500">USSD Engine Strategy</span>
+                  <span className="font-bold text-gray-900 dark:text-white text-[11px]">
+                    {dashboard?.tenantSettings?.ussdHandlerStrategy === "GAMMA_COATINGS"
+                      ? "Gamma Coatings Flow"
+                      : "Universal Modular Engine"}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center p-2.5 rounded-xl bg-gray-50/50 dark:bg-white/[0.01]">
+                  <span className="font-medium text-gray-500">Cashout Privilege Lock</span>
+                  <span className={`font-bold text-[11px] ${consumer.status === "suspended" || editData.status === "suspended" ? "text-rose-500" : "text-emerald-500"}`}>
+                    {consumer.status === "suspended" || editData.status === "suspended" ? "🔒 Locked (Blocked)" : "✓ Active (Allowed)"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
           </div>
         </div>
       )}
@@ -700,22 +752,22 @@ export default function ConsumerDetail({ params }: PageProps) {
             {/* Financial Caps & Limits */}
             <div className="bg-white dark:bg-white/[0.02] border border-gray-200/80 dark:border-white/[0.06] rounded-2xl p-6 shadow-sm space-y-4">
               <h3 className="text-sm font-bold text-gray-900 dark:text-white border-b border-gray-100 dark:border-white/5 pb-3">
-                Financial Redemption Caps &amp; Guard Controls
+                {rewardTerms.rewardMode === "INSTANT_CASHBACK" ? "Financial Cashout Caps & Payout Guard Controls" : "Financial Redemption Caps & Guard Controls"}
               </h3>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <DetailItem label="Daily Redemption Limit (PTS)" value={consumer.redemptionDailyLimit ? `${consumer.redemptionDailyLimit} PTS` : "Default (No Cap)"} isEditing={isEditing} field="redemptionDailyLimit" data={editData} setData={setEditData} type="number" placeholder="e.g. 5000" />
-                <DetailItem label="Weekly Redemption Limit (PTS)" value={consumer.redemptionWeeklyLimit ? `${consumer.redemptionWeeklyLimit} PTS` : "Default (No Cap)"} isEditing={isEditing} field="redemptionWeeklyLimit" data={editData} setData={setEditData} type="number" placeholder="e.g. 25000" />
+                <DetailItem label={`Daily ${rewardTerms.rewardMode === "INSTANT_CASHBACK" ? "Cashout" : "Redemption"} Limit (${rewardTerms.unitLabel})`} value={consumer.redemptionDailyLimit ? `${consumer.redemptionDailyLimit} ${rewardTerms.unitLabel}` : "Default (No Cap)"} isEditing={isEditing} field="redemptionDailyLimit" data={editData} setData={setEditData} type="number" placeholder="e.g. 5000" />
+                <DetailItem label={`Weekly ${rewardTerms.rewardMode === "INSTANT_CASHBACK" ? "Cashout" : "Redemption"} Limit (${rewardTerms.unitLabel})`} value={consumer.redemptionWeeklyLimit ? `${consumer.redemptionWeeklyLimit} ${rewardTerms.unitLabel}` : "Default (No Cap)"} isEditing={isEditing} field="redemptionWeeklyLimit" data={editData} setData={setEditData} type="number" placeholder="e.g. 25000" />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <DetailItem label="Monthly Redemption Limit (PTS)" value={consumer.redemptionMonthlyLimit ? `${consumer.redemptionMonthlyLimit} PTS` : "Default (No Cap)"} isEditing={isEditing} field="redemptionMonthlyLimit" data={editData} setData={setEditData} type="number" placeholder="e.g. 100000" />
-                <DetailItem label="Single Transaction Max Points" value={consumer.redemptionSingleMaxPoints ? `${consumer.redemptionSingleMaxPoints} PTS` : "Default (No Cap)"} isEditing={isEditing} field="redemptionSingleMaxPoints" data={editData} setData={setEditData} type="number" placeholder="e.g. 10000" />
+                <DetailItem label={`Monthly ${rewardTerms.rewardMode === "INSTANT_CASHBACK" ? "Cashout" : "Redemption"} Limit (${rewardTerms.unitLabel})`} value={consumer.redemptionMonthlyLimit ? `${consumer.redemptionMonthlyLimit} ${rewardTerms.unitLabel}` : "Default (No Cap)"} isEditing={isEditing} field="redemptionMonthlyLimit" data={editData} setData={setEditData} type="number" placeholder="e.g. 100000" />
+                <DetailItem label={`Single Transaction Max (${rewardTerms.unitLabel})`} value={consumer.redemptionSingleMaxPoints ? `${consumer.redemptionSingleMaxPoints} ${rewardTerms.unitLabel}` : "Default (No Cap)"} isEditing={isEditing} field="redemptionSingleMaxPoints" data={editData} setData={setEditData} type="number" placeholder="e.g. 10000" />
               </div>
 
               <div className="pt-2 border-t border-gray-100 dark:border-white/5 space-y-3">
-                <ControlToggle title="Manager Approval Required for Redemptions" description="Triggers manual supervisor authorization before M-Pesa disbursement" isEditing={isEditing} field="redemptionRequiresApproval" data={editData} setData={setEditData} />
-                <ControlToggle title="Global Redemption Access Enabled" description="Master policy toggle for participant cash disbursements" isEditing={isEditing} field="redemptionEnabled" data={editData} setData={setEditData} />
+                <ControlToggle title={`Manager Approval Required for ${rewardTerms.actionRedeemLabel}`} description="Triggers manual supervisor authorization before M-Pesa disbursement" isEditing={isEditing} field="redemptionRequiresApproval" data={editData} setData={setEditData} />
+                <ControlToggle title={`Global ${rewardTerms.rewardMode === "INSTANT_CASHBACK" ? "Cashout" : "Redemption"} Access Enabled`} description="Master policy toggle for participant cash disbursements" isEditing={isEditing} field="redemptionEnabled" data={editData} setData={setEditData} />
                 {!editData.redemptionEnabled && (
                   <DetailItem label="Redemption Blocked Reason" value={consumer.redemptionBlockedReason} isEditing={isEditing} field="redemptionBlockedReason" data={editData} setData={setEditData} placeholder="Reason for blocking redemptions" />
                 )}
@@ -766,10 +818,10 @@ export default function ConsumerDetail({ params }: PageProps) {
             <div className="bg-white dark:bg-white/[0.02] border border-gray-200/80 dark:border-white/[0.06] rounded-2xl p-6 shadow-sm space-y-2">
               <h3 className="text-sm font-bold text-gray-900 dark:text-white border-b border-gray-100 dark:border-white/5 pb-3">Granular Capabilities Matrix</h3>
               <ControlToggle title="Can Purchase Products" description="Participant is eligible for promotional item purchases" isEditing={isEditing} field="canPurchase" data={editData} setData={setEditData} />
-              <ControlToggle title="Can Earn Points" description="Allow participant to scan and earn loyalty points" isEditing={isEditing} field="canEarnPoints" data={editData} setData={setEditData} />
-              <ControlToggle title="Can Redeem Points" description="Allow participant to claim M-Pesa disbursements" isEditing={isEditing} field="canRedeemPoints" data={editData} setData={setEditData} />
-              <ControlToggle title="Can Bank Points" description="Allow participant to transfer points into savings bank" isEditing={isEditing} field="canBankPoints" data={editData} setData={setEditData} />
-              <ControlToggle title="Can Transfer Points" description="Allow P2P point transfers to other consumers" isEditing={isEditing} field="canTransferPoints" data={editData} setData={setEditData} />
+              <ControlToggle title={rewardTerms.rewardMode === "INSTANT_CASHBACK" ? "Can Receive Cashback Rewards" : "Can Earn Points"} description="Allow participant to scan and receive loyalty rewards" isEditing={isEditing} field="canEarnPoints" data={editData} setData={setEditData} />
+              <ControlToggle title={rewardTerms.rewardMode === "INSTANT_CASHBACK" ? "Can Execute Cashout Payouts" : "Can Redeem Points"} description="Allow participant to claim M-Pesa disbursements" isEditing={isEditing} field="canRedeemPoints" data={editData} setData={setEditData} />
+              <ControlToggle title={rewardTerms.rewardMode === "INSTANT_CASHBACK" ? "Can Bank Savings" : "Can Bank Points"} description="Allow participant to transfer savings into bank wallet" isEditing={isEditing} field="canBankPoints" data={editData} setData={setEditData} />
+              <ControlToggle title={rewardTerms.rewardMode === "INSTANT_CASHBACK" ? "Can Transfer Balance" : "Can Transfer Points"} description="Allow P2P balance transfers to other consumers" isEditing={isEditing} field="canTransferPoints" data={editData} setData={setEditData} />
               <ControlToggle title="Can Receive Gifts" description="Allow receiving reward gifts and vouchers" isEditing={isEditing} field="canReceiveGifts" data={editData} setData={setEditData} />
               <ControlToggle title="Can Participate In Campaigns" description="Allow auto-enrollment in active brand campaigns" isEditing={isEditing} field="canParticipateInCampaigns" data={editData} setData={setEditData} />
             </div>

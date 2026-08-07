@@ -34,17 +34,14 @@ const formatStatusLabel = (status: string): string => {
   if (!status) return "";
   const map: Record<string, string> = {
     GENERATED: "Generated",
+    PRINTED: "Printed",
     AT_PRINTER: "At Printer Press",
     IN_TRANSIT: "In Transit",
-    IN_STOCK: "In Stock",
+    IN_STOCK: "In Stock in Warehouse",
     ACTIVE: "Active",
     REDEEMED: "Redeemed",
     CANCELLED: "Cancelled",
     EXPIRED: "Expired",
-    PENDING: "Pending",
-    PROCESSING: "Processing",
-    SUCCESS: "Success",
-    FAILED: "Failed",
   };
   if (map[status.toUpperCase()]) return map[status.toUpperCase()];
   const cleaned = status.replace(/_/g, " ").toLowerCase();
@@ -56,25 +53,32 @@ export default function VoucherList() {
   const [statusFilter, setStatusFilter] = useState("");
   const [page, setPage] = useState(1);
 
-  const params = new URLSearchParams({ page: String(page), limit: "50" });
-  if (statusFilter) params.set("status", statusFilter);
-  if (batchFilter) params.set("batchId", batchFilter);
+  const queryParams = new URLSearchParams();
+  queryParams.set("page", String(page));
+  queryParams.set("limit", "50");
+  if (statusFilter) queryParams.set("status", statusFilter);
+  if (batchFilter) queryParams.set("batchId", batchFilter);
 
-  const { data: result, isLoading } = useApi<any>(`/vouchers?${params}`);
+  const queryString = queryParams.toString();
+  const { data: result, isLoading } = useApi<any>(`/vouchers?${queryString}`);
   const { data: batchesRes } = useApi<any>("/vouchers/batches");
 
-  const batchOptions = (Array.isArray(batchesRes) ? batchesRes : batchesRes?.data || []).map((b: any) => ({
-    value: b.id,
-    label: `${b.batchNumber} (${b.quantity} cards)`,
-  }));
+  const batchOptions = [
+    { value: "", label: "All Voucher Batches" },
+    ...(Array.isArray(batchesRes) ? batchesRes : batchesRes?.data || []).map((b: any) => ({
+      value: b.id,
+      label: `${b.batchNumber} (${(b.generated || b.quantity || 0).toLocaleString()} cards)`,
+    })),
+  ];
 
   const statusOptions = [
-    { value: "PRINTED", label: "Printed" },
+    { value: "", label: "All Card Statuses" },
+    { value: "PRINTED", label: "Printed / Unassigned" },
     { value: "IN_TRANSIT", label: "In Transit" },
-    { value: "ACTIVE", label: "Active" },
-    { value: "REDEEMED", label: "Redeemed" },
+    { value: "IN_STOCK", label: "In Stock in Warehouse" },
+    { value: "ACTIVE", label: "Active / Bound to Tin" },
+    { value: "REDEEMED", label: "Redeemed / Claimed" },
     { value: "CANCELLED", label: "Cancelled" },
-    { value: "EXPIRED", label: "Expired" },
   ];
 
   const vouchers: any[] = Array.isArray(result) ? result : result?.data || [];
@@ -116,10 +120,10 @@ export default function VoucherList() {
               setBatchFilter(val);
               setPage(1);
             }}
-            placeholder="All batches"
+            placeholder="All Voucher Batches"
           />
         </div>
-        <div className="w-48">
+        <div className="w-52">
           <ModernSelect
             options={statusOptions}
             value={statusFilter}
@@ -127,10 +131,10 @@ export default function VoucherList() {
               setStatusFilter(val);
               setPage(1);
             }}
-            placeholder="All statuses"
+            placeholder="All Card Statuses"
           />
         </div>
-        <span className="ml-auto text-xs font-semibold text-gray-500 dark:text-gray-400">
+        <span className="ml-auto text-xs font-semibold text-gray-500 dark:text-gray-400 font-mono">
           {pagination?.total?.toLocaleString() ?? vouchers.length} Vouchers Cataloged
         </span>
       </div>
@@ -156,55 +160,52 @@ export default function VoucherList() {
             </TableHeader>
             <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.04]">
               {vouchers.length > 0 ? (
-                vouchers.map((v: any) => {
-                  const isValuePool = v.batchType === "VALUE_BASED";
-                  return (
-                    <TableRow key={v.id} className="hover:bg-gray-50/50 dark:hover:bg-white/[0.02] transition-colors">
-                      <TableCell className="py-3.5 px-6">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-brand-500/10 text-brand-600 dark:text-brand-400 flex items-center justify-center font-bold text-xs border border-brand-500/20 shrink-0 shadow-2xs">
-                            <BoxCubeIcon className="w-3.5 h-3.5" />
-                          </div>
-                          <span className="font-mono text-xs font-bold text-gray-900 dark:text-white tracking-wider">{v.serialNumber}</span>
+                vouchers.map((v: any) => (
+                  <TableRow key={v.id} className="hover:bg-gray-50/50 dark:hover:bg-white/[0.02] transition-colors">
+                    <TableCell className="py-3.5 px-6">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-brand-500/10 text-brand-600 dark:text-brand-400 flex items-center justify-center font-bold text-xs border border-brand-500/20 shrink-0 shadow-2xs">
+                          <BoxCubeIcon className="w-3.5 h-3.5" />
                         </div>
-                      </TableCell>
-                      <TableCell className="py-3.5 px-6">
-                        <span className="font-mono text-xs font-semibold text-gray-600 dark:text-gray-300">{v.batchNumber}</span>
-                      </TableCell>
-                      <TableCell className="py-3.5 px-6 font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                        KES {Number(v.rewardDenomination || 50).toFixed(2)}
-                      </TableCell>
-                      <TableCell className="py-3.5 px-6 text-xs text-gray-600 dark:text-gray-300 font-medium">
-                        {v.productName ? (
-                          <span className="font-semibold text-gray-900 dark:text-white">{v.productName}</span>
-                        ) : (
-                          <span className="text-amber-600 dark:text-amber-400 italic">Generic Pool</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="py-3.5 px-6">
-                        <Badge size="sm" color={STATUS_COLORS[v.status] || "light"}>
-                          {formatStatusLabel(v.status)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="py-3.5 px-6 text-xs text-gray-500 font-medium">
-                        {v.redeemedAt ? (
-                          new Date(v.redeemedAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
-                        ) : (
-                          <span className="text-gray-400">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="py-3.5 px-6 text-right">
-                        <Link href={`/vouchers/${v.id}`} className="text-xs font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 transition">
-                          Details &rarr;
-                        </Link>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
+                        <span className="font-mono text-xs font-bold text-gray-900 dark:text-white tracking-wider">{v.serialNumber}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="py-3.5 px-6">
+                      <span className="font-mono text-xs font-semibold text-gray-600 dark:text-gray-300">{v.batchNumber}</span>
+                    </TableCell>
+                    <TableCell className="py-3.5 px-6 font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                      KES {Number(v.rewardDenomination || 50).toFixed(2)}
+                    </TableCell>
+                    <TableCell className="py-3.5 px-6 text-xs text-gray-600 dark:text-gray-300 font-medium">
+                      {v.productName ? (
+                        <span className="font-semibold text-gray-900 dark:text-white">{v.productName}</span>
+                      ) : (
+                        <span className="text-amber-600 dark:text-amber-400 italic">Generic Pool</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="py-3.5 px-6">
+                      <Badge size="sm" color={STATUS_COLORS[v.status] || "light"}>
+                        {formatStatusLabel(v.status)}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="py-3.5 px-6 text-xs text-gray-500 font-medium">
+                      {v.redeemedAt ? (
+                        new Date(v.redeemedAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
+                      ) : (
+                        <span className="text-gray-400">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="py-3.5 px-6 text-right">
+                      <Link href={`/vouchers/${v.id}`} className="text-xs font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 transition">
+                        Details &rarr;
+                      </Link>
+                    </TableCell>
+                  </TableRow>
+                ))
               ) : (
                 <TableRow>
                   <TableCell colSpan={7} className="py-16 text-center text-xs text-gray-400 italic font-medium">
-                    No vouchers found. {!batchFilter && "Generate a batch first to see serial items."}
+                    No vouchers found for the selected filters.
                   </TableCell>
                 </TableRow>
               )}
@@ -216,13 +217,13 @@ export default function VoucherList() {
       {/* ── Pagination ────────────────────────────────────────────────────── */}
       {pagination && pagination.total > 50 && (
         <div className="flex items-center justify-between pt-2">
-          <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">
-            Page {page} of {Math.ceil(pagination.total / 50)}
+          <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 font-mono">
+            Page {page} of {Math.ceil(pagination.total / 50)} ({pagination.total?.toLocaleString()} Cards Total)
           </span>
           <div className="flex items-center gap-2">
             <button
               disabled={page <= 1}
-              onClick={() => setPage((p) => p - 1)}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
               className="px-3.5 py-1.5 text-xs font-semibold rounded-xl bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-gray-300 hover:bg-gray-200 transition disabled:opacity-50"
             >
               Previous

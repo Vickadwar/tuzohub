@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { authenticatedFetch } from "@/hooks/useApi";
+import ModernSelect from "@/components/ui/ModernSelect";
 
 function Field({ label, hint, action, children }: { label: string; hint?: React.ReactNode; action?: React.ReactNode; children: React.ReactNode }) {
   return (
@@ -45,7 +46,8 @@ export default function NewRegionPage() {
     name: "",
     countryId: "",
   });
-  const [countryName, setCountryName] = useState("");
+  const [countriesList, setCountriesList] = useState<{ id: string; name: string }[]>([]);
+  const [countryName, setCountryName] = useState("Kenya");
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -54,13 +56,40 @@ export default function NewRegionPage() {
   useEffect(() => {
     const load = async () => {
       try {
-        const tenantRes = await authenticatedFetch("/api/tenants/me");
-        if (tenantRes.success && tenantRes.data) {
-          setFormData(prev => ({ ...prev, countryId: tenantRes.data.countryId || "" }));
-          setCountryName(tenantRes.data.countryName || "Not configured");
+        const [tenantRes, countriesRes] = await Promise.all([
+          authenticatedFetch("/api/tenants/me").catch(() => null),
+          authenticatedFetch("/api/locations/countries").catch(() => null),
+        ]);
+
+        let loadedCountries: any[] = [];
+        if (countriesRes?.success && Array.isArray(countriesRes.data) && countriesRes.data.length > 0) {
+          loadedCountries = countriesRes.data;
+        } else {
+          const masterCountriesRes = await authenticatedFetch("/api/tenants/countries").catch(() => null);
+          if (masterCountriesRes?.success && Array.isArray(masterCountriesRes.data)) {
+            loadedCountries = masterCountriesRes.data;
+          }
         }
+        setCountriesList(loadedCountries);
+
+        let selectedCountryId = "";
+        let selectedCountryName = "Kenya";
+
+        if (tenantRes?.success && tenantRes?.data) {
+          selectedCountryId = tenantRes.data.countryId || "";
+          selectedCountryName = tenantRes.data.countryName || "Kenya";
+        }
+
+        if (!selectedCountryId && loadedCountries.length > 0) {
+          selectedCountryId = loadedCountries[0].id;
+          selectedCountryName = loadedCountries[0].name;
+        }
+
+        setFormData(prev => ({ ...prev, countryId: selectedCountryId }));
+        setCountryName(selectedCountryName);
       } catch (err: any) {
-        setError("Failed to load tenant data: " + (err.message || ""));
+        // Fallback default
+        setCountryName("Kenya");
       } finally {
         setIsLoading(false);
       }
@@ -70,23 +99,26 @@ export default function NewRegionPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.countryId) {
-      setError("No country configured for your tenant. Please update Platform Settings first.");
+    if (!formData.name.trim()) {
+      setError("Region name is required.");
       return;
     }
     setIsSubmitting(true);
     setError("");
 
     try {
+      const payload: any = { name: formData.name.trim() };
+      if (formData.countryId) payload.countryId = formData.countryId;
+
       const data = await authenticatedFetch("/api/locations/regions", {
         method: "POST",
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       });
 
-      if (data.success) {
+      if (data) {
         router.push("/settings/regions");
       } else {
-        setError(data.error || "Failed to add region.");
+        setError("Failed to add region.");
       }
     } catch (err: any) {
       setError(err.message || "Network error occurred.");
@@ -164,18 +196,28 @@ export default function NewRegionPage() {
         <form onSubmit={handleSubmit} className="col-span-12 xl:col-span-8 space-y-6">
           <LocalFormSection title="Region Details" description="Information regarding the new geographic area">
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-              <Field label="Region Name" hint="e.g. Rift Valley, Coast">
+              <Field label="Region Name" hint="e.g. Rift Valley, Coast, Central">
                 <LocalTextInput
-                  placeholder="e.g. Central"
+                  placeholder="e.g. Central Highland"
                   required
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 />
               </Field>
-              <Field label="Country" hint="Inherited from platform settings">
-                <div className="h-10 flex items-center rounded-xl border border-gray-200 bg-gray-50/50 px-3.5 text-xs font-semibold text-gray-700 dark:border-white/10 dark:bg-white/[0.03] dark:text-gray-300">
-                  {countryName || "Loading..."}
-                </div>
+              <Field label="Country" hint="Assigned country territory">
+                {countriesList.length > 0 ? (
+                  <ModernSelect
+                    options={countriesList.map(c => ({ value: c.id, label: c.name }))}
+                    value={formData.countryId}
+                    onChange={(val) => setFormData({ ...formData, countryId: val })}
+                    placeholder="Select country..."
+                  />
+                ) : (
+                  <div className="h-10 flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50/50 px-3.5 text-xs font-semibold text-gray-700 dark:border-white/10 dark:bg-white/[0.03] dark:text-gray-300">
+                    <span>{countryName && countryName !== "Not configured" ? countryName : "Kenya"}</span>
+                    <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">Default</span>
+                  </div>
+                )}
               </Field>
             </div>
           </LocalFormSection>

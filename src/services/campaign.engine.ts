@@ -132,4 +132,30 @@ export class CampaignEngine {
 
     return Math.floor(finalPoints);
   }
+
+  /**
+   * Resolves fulfillment details (fulfillmentMode, instantRewardType, instantValue, points) for a matched campaign
+   */
+  static resolveFulfillment(basePoints: number, campaign: any) {
+    if (!campaign) {
+      return {
+        fulfillmentMode: "ACCUMULATION" as const,
+        instantRewardType: null,
+        instantValue: 0,
+        calculatedPoints: basePoints,
+      };
+    }
+
+    const mode = (campaign.fulfillmentMode || "ACCUMULATION").toUpperCase();
+    const rewardType = campaign.instantRewardType ? campaign.instantRewardType.toUpperCase() : null;
+    const instantValue = parseFloat(campaign.instantValue || "0");
+    const calculatedPoints = this.calculatePoints(basePoints, campaign);
+
+    return {
+      fulfillmentMode: mode as "INSTANT" | "ACCUMULATION" | "HYBRID",
+      instantRewardType: rewardType as "CASHBACK" | "AIRTIME" | "MOBILE_DATA" | "SHOPPING_VOUCHER" | null,
+      instantValue,
+      calculatedPoints,
+    };
+  }
 }

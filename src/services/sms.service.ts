@@ -86,7 +86,10 @@ export class SmsService {
         formattedPhone = "+254" + formattedPhone;
       }
 
-      const url = "https://api.africastalking.com/version1/messaging";
+      const isSandbox = (config.username || "").toLowerCase() === "sandbox";
+      const url = isSandbox
+        ? "https://api.sandbox.africastalking.com/version1/messaging"
+        : "https://api.africastalking.com/version1/messaging";
       
       const body = new URLSearchParams();
       body.append("username", config.username || "sandbox");

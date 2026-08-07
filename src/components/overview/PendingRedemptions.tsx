@@ -11,8 +11,15 @@ import Badge from "../ui/badge/Badge";
 import { useApi } from "@/hooks/useApi";
 import Link from "next/link";
 
-export default function PendingRedemptions() {
-  const { data: stats, isLoading } = useApi("/loyalty/stats/overview");
+interface PendingRedemptionsProps {
+  stats?: any;
+  isLoading?: boolean;
+}
+
+export default function PendingRedemptions({ stats: propStats, isLoading: propIsLoading }: PendingRedemptionsProps = {}) {
+  const { data: apiStats, isLoading: apiIsLoading } = useApi(propStats ? null : "/loyalty/stats/overview");
+  const stats = propStats || apiStats;
+  const isLoading = propIsLoading !== undefined ? propIsLoading : apiIsLoading;
 
   const queue = stats?.pendingQueue || [];
   const recentTransactions = stats?.recentTransactions || [];

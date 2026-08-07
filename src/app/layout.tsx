@@ -18,6 +18,8 @@ export const metadata: Metadata = {
   },
 };
 
+import { TenantProvider } from '@/context/TenantContext';
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -28,7 +30,9 @@ export default function RootLayout({
       <body className="font-satoshi dark:bg-gray-900" suppressHydrationWarning>
         <ThemeProvider>
           <UserProvider>
-            <SidebarProvider>{children}</SidebarProvider>
+            <TenantProvider>
+              <SidebarProvider>{children}</SidebarProvider>
+            </TenantProvider>
           </UserProvider>
         </ThemeProvider>
       </body>

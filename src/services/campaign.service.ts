@@ -1,9 +1,9 @@
 import { db } from "../db";
 import { campaigns, campaignProducts, campaignRules, campaignBudgets, products } from "../db/schema";
-import { eq, and, desc, count, ilike, or } from "drizzle-orm";
+import { eq, and, desc, count, ilike, or, sql } from "drizzle-orm";
 
 export interface RuleConfig {
-  fulfillmentMode?: "POINTS_ACCUMULATION" | "INSTANT_PAYOUT" | "VOUCHER_GENERATE";
+  fulfillmentMode?: "POINTS_ACCUMULATION" | "INSTANT_PAYOUT" | "VOUCHER_GENERATE" | "HYBRID";
   payoutRewardType?: "MOBILE_MONEY" | "AIRTIME" | "CATALOG_POINTS" | "SHOPPING_VOUCHER";
   valuationStrategy?: "PRODUCT_BASE_MULTIPLIER" | "FLAT_FIXED_REWARD";
   instantCashAmount?: number;
@@ -17,6 +17,20 @@ export interface RuleConfig {
 }
 
 export class CampaignService {
+  private static columnsInitialized = false;
+  private static async ensureColumnsExist() {
+    if (this.columnsInitialized) return;
+    try {
+      await db.execute(sql`
+        ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS fulfillment_mode VARCHAR(50) DEFAULT 'ACCUMULATION';
+        ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS instant_reward_type VARCHAR(50);
+        ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS instant_value NUMERIC(12, 2);
+      `);
+      this.columnsInitialized = true;
+    } catch (err) {
+      console.warn("Could not ensure campaign metadata columns", err);
+    }
+  }
   /**
    * Links a product to a campaign.
    */
@@ -61,6 +75,9 @@ export class CampaignService {
     name: string;
     description?: string;
     campaignType: string;
+    fulfillmentMode?: "INSTANT" | "ACCUMULATION" | "HYBRID";
+    instantRewardType?: "CASHBACK" | "AIRTIME" | "MOBILE_DATA" | "SHOPPING_VOUCHER";
+    instantValue?: string | number;
     pointsMultiplier?: string;
     startDate: Date;
     endDate?: Date;
@@ -68,12 +85,16 @@ export class CampaignService {
     isRecurring?: boolean;
     ruleConfig?: RuleConfig;
   }) {
-    const { ruleConfig, ...campaignData } = params;
+    await this.ensureColumnsExist();
+    const { ruleConfig, instantValue, ...campaignData } = params;
 
     const [campaign] = await db
       .insert(campaigns)
       .values({
         ...campaignData,
+        fulfillmentMode: campaignData.fulfillmentMode || "ACCUMULATION",
+        instantRewardType: campaignData.instantRewardType || null,
+        instantValue: instantValue ? instantValue.toString() : null,
         isActive: campaignData.isActive ?? true,
       })
       .returning();
@@ -119,6 +140,7 @@ export class CampaignService {
     limit: number;
     search?: string;
   }) {
+    await this.ensureColumnsExist();
     const { tenantId, page, limit, search } = params;
     const offset = (page - 1) * limit;
 
@@ -138,10 +160,6 @@ export class CampaignService {
     const [rows, totalResult] = await Promise.all([
       db.query.campaigns.findMany({
         where,
-        with: {
-          rules: true,
-          budget: true,
-        },
         orderBy: [desc(campaigns.createdAt)],
         limit,
         offset,
@@ -166,10 +184,40 @@ export class CampaignService {
   /**
    * Updates an existing campaign.
    */
-  static async updateCampaign(id: string, tenantId: string, updates: Partial<typeof campaigns.$inferInsert>) {
+  static async updateCampaign(id: string, tenantId: string, updates: Record<string, any>) {
+    await this.ensureColumnsExist();
+
+    const {
+      id: _id,
+      tenantId: _tenantId,
+      createdAt: _createdAt,
+      updatedAt: _updatedAt,
+      deletedAt: _deletedAt,
+      rules: _rules,
+      budget: _budget,
+      ruleConfig: _ruleConfig,
+      linkedProducts: _linkedProducts,
+      ...cleanUpdates
+    } = updates;
+
+    const payload: Record<string, any> = {
+      ...cleanUpdates,
+      updatedAt: new Date(),
+    };
+
+    if (payload.startDate) {
+      payload.startDate = new Date(payload.startDate);
+    }
+    if (payload.endDate !== undefined) {
+      payload.endDate = payload.endDate ? new Date(payload.endDate) : null;
+    }
+    if (payload.pointsMultiplier !== undefined && payload.pointsMultiplier !== null) {
+      payload.pointsMultiplier = String(payload.pointsMultiplier);
+    }
+
     const [campaign] = await db
       .update(campaigns)
-      .set({ ...updates, updatedAt: new Date() })
+      .set(payload)
       .where(and(eq(campaigns.id, id), eq(campaigns.tenantId, tenantId)))
       .returning();
 
@@ -183,13 +231,19 @@ export class CampaignService {
   static async getCampaign(id: string, tenantId: string) {
     const campaign = await db.query.campaigns.findFirst({
       where: and(eq(campaigns.id, id), eq(campaigns.tenantId, tenantId)),
-      with: {
-        rules: true,
-        budget: true,
-      },
     });
 
     if (!campaign) throw new Error("Campaign not found or unauthorized");
-    return campaign;
+
+    const [rules, budget] = await Promise.all([
+      db.select().from(campaignRules).where(eq(campaignRules.campaignId, id)),
+      db.select().from(campaignBudgets).where(eq(campaignBudgets.campaignId, id)).then((r) => r[0] || null),
+    ]);
+
+    return {
+      ...campaign,
+      rules,
+      budget,
+    };
   }
 }

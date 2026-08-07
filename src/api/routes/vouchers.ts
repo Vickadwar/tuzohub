@@ -213,4 +213,20 @@ app.get("/:id", async (c) => {
   }
 });
 
+/**
+ * DELETE /api/vouchers/batches/:id
+ * Deletes an unutilized voucher batch if no vouchers have been claimed.
+ */
+app.delete("/batches/:id", async (c) => {
+  const user = c.get("user");
+  const id = c.req.param("id");
+
+  try {
+    const deleted = await VoucherService.deleteBatch(id, user.tenantId, user.userId);
+    return c.json({ success: true, message: "Voucher batch deleted successfully", data: deleted });
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 400);
+  }
+});
+
 export default app;

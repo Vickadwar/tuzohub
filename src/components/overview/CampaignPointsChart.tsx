@@ -11,8 +11,15 @@ const ReactApexChart = dynamic(() => import("react-apexcharts"), {
   ssr: false,
 });
 
-export default function CampaignPointsChart() {
-  const { data: stats, isLoading } = useApi("/loyalty/stats/overview");
+interface CampaignPointsChartProps {
+  stats?: any;
+  isLoading?: boolean;
+}
+
+export default function CampaignPointsChart({ stats: propStats, isLoading: propIsLoading }: CampaignPointsChartProps = {}) {
+  const { data: apiStats, isLoading: apiIsLoading } = useApi(propStats ? null : "/loyalty/stats/overview");
+  const stats = propStats || apiStats;
+  const isLoading = propIsLoading !== undefined ? propIsLoading : apiIsLoading;
   const [isOpen, setIsOpen] = useState(false);
 
   const { categories, series } = useMemo(() => {

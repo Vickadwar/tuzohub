@@ -1,5 +1,5 @@
 import { db } from "../db";
-import { consumers, wallets, transactions, vouchers, pointLots, towns, tenantTiers, campaigns } from "../db/schema";
+import { consumers, wallets, transactions, vouchers, pointLots, towns, tenantTiers, campaigns, tenantSettings } from "../db/schema";
 import { eq, desc, and, or, ilike, sql, count, asc } from "drizzle-orm";
 
 export class ConsumerService {
@@ -263,8 +263,13 @@ export class ConsumerService {
       .sort((a, b) => b.count - a.count)
       .slice(0, 5);
 
-    // 4. Get Consumer and Tier
-    const consumerData = await this.getProfile(consumerId, tx);
+    // 4. Get Consumer, Tier, and Tenant Settings
+    const [consumerData, tSettingsRecord] = await Promise.all([
+      this.getProfile(consumerId, tx),
+      tx.query.tenantSettings.findFirst({
+        where: eq(tenantSettings.tenantId, tenantId),
+      }).catch(() => null),
+    ]);
 
     return {
       wallet: {
@@ -274,6 +279,7 @@ export class ConsumerService {
         lifetimePointsEarned: wallet.lifetimePointsEarned,
       },
       consumer: consumerData,
+      tenantSettings: tSettingsRecord,
       activity: {
         data: groupedActivity,
         total: activityCount.total,

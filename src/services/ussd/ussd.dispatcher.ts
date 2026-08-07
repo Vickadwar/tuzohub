@@ -2,22 +2,24 @@ import { db } from "../../db";
 import { tenants, tenantSettings, consumers } from "../../db/schema";
 import { eq, and } from "drizzle-orm";
 import { IUssdHandler, UssdRequestParams, UssdRequestContext } from "./ussd.interface";
-import { DefaultUssdService } from "./default.ussd";
+import { ConfigurableUssdEngine } from "./configurable.ussd";
 import { GammaUssdService } from "./gamma.ussd";
 
 export class UssdDispatcher {
   private static readonly HANDLERS: Record<string, IUssdHandler> = {
     "gamma-coatings": new GammaUssdService(),
     "gamma": new GammaUssdService(),
+    "GAMMA_COATINGS": new GammaUssdService(),
   };
 
-  private static readonly defaultHandler: IUssdHandler = new DefaultUssdService();
+  private static readonly defaultHandler: IUssdHandler = new ConfigurableUssdEngine();
 
   /**
    * Dispatch an incoming USSD request to the appropriate tenant strategy handler.
-   * Implements Hybrid Routing:
-   * 1. Primary: Resolves tenant via explicit URL parameter (`tenantId` or `tenantSlug`).
-   * 2. Fallback: Discovers tenant by inspecting `serviceCode` in tenant database settings.
+   * Super Admin Telco Governance & Dynamic Strategy Resolution:
+   * 1. Primary: Explicit URL parameter (`tenantId` or `tenantSlug`).
+   * 2. Shortcode Binding: Match DB `primaryShortcode` or `sharedSubPrefix` against incoming `serviceCode`.
+   * 3. Strategy Handler Selection: Route to `GammaUssdService` or universal `ConfigurableUssdEngine`.
    */
   static async dispatch(params: UssdRequestParams): Promise<string> {
     let resolvedTenantId = params.tenantId;
@@ -33,21 +35,27 @@ export class UssdDispatcher {
       }
     }
 
-    // 2. Fallback Safeguard: Auto-discovery via shortcode (serviceCode) lookup
+    // 2. Shortcode Binding Auto-Discovery (Super Admin configured primaryShortcode & sharedSubPrefix)
     if (!resolvedTenantId && params.serviceCode) {
       const cleanCode = params.serviceCode.replace(/[^0-9*]/g, "");
       const allSettings = await db.select().from(tenantSettings);
+      
       for (const setting of allSettings) {
         const creds = (setting.credentials || {}) as any;
-        const targetCode = (creds.ussdServiceCode || creds.serviceCode || "").replace(/[^0-9*]/g, "");
-        if (targetCode && (targetCode === cleanCode || cleanCode.includes(targetCode) || targetCode.includes(cleanCode))) {
+        const primarySc = (setting.primaryShortcode || creds.ussdServiceCode || creds.serviceCode || "").replace(/[^0-9*]/g, "");
+        const subPrefix = (setting.sharedSubPrefix || "").replace(/[^0-9*]/g, "");
+
+        if (
+          (primarySc && (primarySc === cleanCode || cleanCode.includes(primarySc))) ||
+          (subPrefix && (subPrefix === cleanCode || cleanCode.includes(subPrefix)))
+        ) {
           resolvedTenantId = setting.tenantId;
           break;
         }
       }
     }
 
-    // 3. Ultimate Fallback for Staging/Testing: Default to Gamma Coatings (or first active tenant)
+    // 3. Fallback for Staging: Default to Gamma Coatings or first available tenant
     if (!resolvedTenantId) {
       const fallbackTenant = await db.select().from(tenants)
         .where(eq(tenants.slug, "gamma-coatings"))
@@ -72,7 +80,7 @@ export class UssdDispatcher {
     const normalizedPhone = this.normalizePhone(params.phoneNumber);
     const levels = params.text.split("*").filter(Boolean);
 
-    // 3. Fetch Consumer, Tenant, and Tenant Settings
+    // 4. Fetch Consumer, Tenant, and Tenant Settings
     const [consumer, tenantRecord, tSettingsRecord] = await Promise.all([
       this.findConsumer(normalizedPhone, resolvedTenantId),
       db.select().from(tenants).where(eq(tenants.id, resolvedTenantId)).limit(1).then(r => r[0]),
@@ -92,11 +100,19 @@ export class UssdDispatcher {
       tSettingsRecord,
     };
 
-    // 4. Resolve Strategy Handler
+    // 5. Strategy Handler Resolution (Super Admin controlled ussdHandlerStrategy)
+    const strategy = (tSettingsRecord?.ussdHandlerStrategy || "").toUpperCase();
     const slug = (tenantRecord?.slug || "").toLowerCase();
-    const isGamma = slug === "gamma-coatings" || slug === "gamma" || (tenantRecord?.name || "").toLowerCase().includes("gamma");
     
-    const handler = isGamma ? new GammaUssdService() : (this.HANDLERS[slug] || this.defaultHandler);
+    let handler: IUssdHandler;
+    if (strategy === "GAMMA_COATINGS" || strategy === "GAMMA" || slug === "gamma-coatings") {
+      handler = new GammaUssdService();
+    } else if (this.HANDLERS[strategy]) {
+      handler = this.HANDLERS[strategy];
+    } else {
+      // Default to universal schema-driven ConfigurableUssdEngine
+      handler = this.defaultHandler;
+    }
 
     return await handler.processRequest(params, context);
   }

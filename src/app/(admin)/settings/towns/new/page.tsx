@@ -56,9 +56,8 @@ export default function NewTownPage() {
     const load = async () => {
       try {
         const regionsRes = await authenticatedFetch("/api/locations/regions");
-        if (regionsRes.success) {
-          setRegionsList(regionsRes.data || []);
-        }
+        const list = Array.isArray(regionsRes) ? regionsRes : (regionsRes?.data || []);
+        setRegionsList(list);
       } catch (err: any) {
         setError("Failed to load regions: " + (err.message || ""));
       } finally {
@@ -83,10 +82,10 @@ export default function NewTownPage() {
         body: JSON.stringify(formData),
       });
 
-      if (data.success) {
+      if (data) {
         router.push("/settings/towns");
       } else {
-        setError(data.error || "Failed to add town.");
+        setError("Failed to add town.");
       }
     } catch (err: any) {
       setError(err.message || "Network error occurred.");

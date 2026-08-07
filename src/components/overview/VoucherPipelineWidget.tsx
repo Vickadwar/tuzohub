@@ -4,10 +4,18 @@ import React from "react";
 import Link from "next/link";
 import { useApi } from "@/hooks/useApi";
 
-export default function VoucherPipelineWidget() {
-  const { data: stats, isLoading, isError } = useApi("/loyalty/stats/overview", {
+interface VoucherPipelineWidgetProps {
+  stats?: any;
+  isLoading?: boolean;
+}
+
+export default function VoucherPipelineWidget({ stats: propStats, isLoading: propIsLoading }: VoucherPipelineWidgetProps = {}) {
+  const { data: apiStats, isLoading: apiIsLoading, isError } = useApi(propStats ? null : "/loyalty/stats/overview", {
     refreshInterval: 10000,
   });
+
+  const stats = propStats || apiStats;
+  const isLoading = propIsLoading !== undefined ? propIsLoading : apiIsLoading;
 
   const pipeline = stats?.voucherPipeline || {
     GENERATED: 0,

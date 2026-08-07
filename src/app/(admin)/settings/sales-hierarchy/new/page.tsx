@@ -64,10 +64,10 @@ export default function NewStaffPage() {
         body: JSON.stringify(formData),
       });
 
-      if (data.success) {
+      if (data) {
         router.push("/settings/sales-hierarchy");
       } else {
-        setError(data.error || "Failed to register field personnel.");
+        setError("Failed to register field personnel.");
       }
     } catch (err: any) {
       setError(err.message || "Network error occurred.");

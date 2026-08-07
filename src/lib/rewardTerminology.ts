@@ -25,13 +25,17 @@ export function resolveRewardTerminology(
 ): RewardTerminology {
   const meta = context?.metadata || {};
   const settings = context?.tenantSettings || {};
+  const creds = settings.credentials || {};
 
   // 1. Determine Reward Mode
   let mode: string = 
     meta.rewardMode || 
     context?.campaignType || 
     settings.defaultRewardMode || 
-    "POINTS";
+    settings.rewardMode ||
+    creds.defaultRewardMode ||
+    creds.rewardMode ||
+    (settings.ussdHandlerStrategy === "GAMMA_COATINGS" ? "INSTANT_CASHBACK" : "POINTS");
 
   // Normalize mode string
   mode = mode.toUpperCase();
@@ -40,13 +44,24 @@ export function resolveRewardTerminology(
   else if (mode.includes("HYBRID")) mode = "HYBRID";
   else mode = "POINTS";
 
+  let defaultUnit = "PTS";
+  if (mode === "INSTANT_CASHBACK") defaultUnit = "KES";
+  else if (mode === "INSTANT_AIRTIME") defaultUnit = "Airtime";
+  else if (mode === "HYBRID") defaultUnit = "PTS / KES";
+
   const customUnit = settings.rewardUnitLabel || meta.unitLabel;
+  // If custom unit is same as another mode's default or standard fallback, use mode's natural unit
+  const activeUnit = (customUnit && customUnit !== "PTS" && mode === "INSTANT_CASHBACK") 
+    ? customUnit 
+    : (customUnit && mode !== "INSTANT_CASHBACK" && mode !== "INSTANT_AIRTIME")
+    ? customUnit
+    : defaultUnit;
 
   switch (mode) {
     case "INSTANT_CASHBACK":
       return {
         rewardMode: "INSTANT_CASHBACK",
-        unitLabel: customUnit || "KES",
+        unitLabel: (settings.rewardUnitLabel && settings.rewardUnitLabel !== "PTS") ? settings.rewardUnitLabel : "KES",
         balanceHeader: "Total Instant Disbursed",
         earnedHeader: "Instant Cashback Disbursed",
         redeemedHeader: "M-Pesa Disbursed Payouts",
@@ -58,7 +73,7 @@ export function resolveRewardTerminology(
     case "INSTANT_AIRTIME":
       return {
         rewardMode: "INSTANT_AIRTIME",
-        unitLabel: customUnit || "Airtime",
+        unitLabel: (settings.rewardUnitLabel && settings.rewardUnitLabel !== "PTS") ? settings.rewardUnitLabel : "Airtime",
         balanceHeader: "Total Airtime Credited",
         earnedHeader: "Airtime Disbursed",
         redeemedHeader: "Airtime Recharges",
@@ -70,7 +85,7 @@ export function resolveRewardTerminology(
     case "HYBRID":
       return {
         rewardMode: "HYBRID",
-        unitLabel: customUnit || "PTS / KES",
+        unitLabel: (settings.rewardUnitLabel && settings.rewardUnitLabel !== "PTS") ? settings.rewardUnitLabel : "PTS / KES",
         balanceHeader: "Points & Cash Rewards",
         earnedHeader: "Combined Rewards Earned",
         redeemedHeader: "Redemptions & Cash Payouts",
@@ -83,7 +98,7 @@ export function resolveRewardTerminology(
     default:
       return {
         rewardMode: "POINTS",
-        unitLabel: customUnit || "PTS",
+        unitLabel: settings.rewardUnitLabel || "PTS",
         balanceHeader: "Available Loyalty Points",
         earnedHeader: "Total Points Earned",
         redeemedHeader: "Total Points Redeemed",

@@ -2,8 +2,15 @@
 import React from "react";
 import { useApi } from "@/hooks/useApi";
 
-export default function ProductPerformance() {
-  const { data: stats, isLoading } = useApi("/loyalty/stats/overview");
+interface ProductPerformanceProps {
+  stats?: any;
+  isLoading?: boolean;
+}
+
+export default function ProductPerformance({ stats: propStats, isLoading: propIsLoading }: ProductPerformanceProps = {}) {
+  const { data: apiStats, isLoading: apiIsLoading } = useApi(propStats ? null : "/loyalty/stats/overview");
+  const stats = propStats || apiStats;
+  const isLoading = propIsLoading !== undefined ? propIsLoading : apiIsLoading;
 
   const products = stats?.topProducts || [];
 

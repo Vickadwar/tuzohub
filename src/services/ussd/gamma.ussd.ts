@@ -151,28 +151,40 @@ export class GammaUssdService implements IUssdHandler {
         });
 
         return isSwahili
-          ? "CON Umesajiliwa kikamilifu! Weka nambari ya Vocha:"
-          : "CON Registration successful! Enter your Gamma Voucher Number:";
+          ? "CON Umesajiliwa kikamilifu! Weka nambari ya Vocha, au bonyeza 0 kuruka kwa sasa:"
+          : "CON Registration successful! Enter your Gamma Voucher Number, or press 0 to skip for now:";
       }
 
       if (levels.length === currentLevelIdx + 2) {
         const enteredCode = levels[currentLevelIdx + 1]?.trim();
-        if (!enteredCode) {
-          return isSwahili ? "END Vocha sio sahihi." : "END Invalid voucher number.";
-        }
-
         const fullName = levels[1];
         const parts = fullName.trim().split(/\s+/);
         const firstName = parts[0] || "Gamma";
         const lastName = parts.slice(1).join(" ") || "User";
+        const lang = isSwahili ? "sw" : "en";
 
-        // Trigger background verification & SMS
+        // Trigger onboarding SMS (Welcome + T&C link)
+        this.sendOnboardingSms({
+          tenantId,
+          phoneNumber,
+          language: lang,
+          fullName: `${firstName} ${lastName}`.trim(),
+        }).catch(err => console.error("Error sending onboarding SMS", err));
+
+        // If user enters 0 or skip, finish registration cleanly
+        if (!enteredCode || enteredCode === "0" || enteredCode.toUpperCase() === "SKIP") {
+          return isSwahili
+            ? `END Karibu ${firstName}! Usajili wako umekamilika. Utapokea SMS yenye maelezo ya akaunti yako na Vigezo na Masharti.`
+            : `END Welcome ${firstName}! Your registration is complete. You will receive an SMS with your account details & Terms & Conditions link shortly.`;
+        }
+
+        // Trigger background voucher processing
         this.verifyVoucherAndSendSms({
           tenantId,
           consumerId: consumer?.id || "",
           enteredCode,
           phoneNumber,
-          language: isSwahili ? "sw" : "en",
+          language: lang,
           fullName: `${firstName} ${lastName}`.trim(),
         }).catch(err => console.error("Error in background voucher processing", err));
 
@@ -187,6 +199,13 @@ export class GammaUssdService implements IUssdHandler {
     // ── REGISTERED USER FLOW (Scenario C) ──────────────────────────
     const consumerLang = consumer.preferredLanguage || "en";
     const isConsumerSwahili = consumerLang === "sw";
+
+    // Check if consumer is locked/suspended
+    if (consumer.status === "suspended" || (consumer as any).isRedemptionLocked) {
+      return isConsumerSwahili
+        ? "END Ilani ya Akaunti: Huduma za kutoa fedha zimefungwa kwenye nambari yako. Tafadhali wasiliana na huduma kwa wateja kwa +254 756 509 898."
+        : "END Account Notice: Cashout privileges are currently locked for your mobile number. Please contact customer support (+254 756 509 898).";
+    }
 
     if (text === "") {
       return isConsumerSwahili
@@ -214,7 +233,7 @@ export class GammaUssdService implements IUssdHandler {
       if (levels.length === 2) {
         const enteredCode = levels[1]?.trim();
         if (!enteredCode) {
-          return isConsumerSwahili ? "END Vocha sio sahihi." : "END Invalid voucher number.";
+          return isConsumerSwahili ? "END Nambari ya vocha inahitajika." : "END Voucher code is required.";
         }
 
         // Trigger background verification & SMS
@@ -228,18 +247,64 @@ export class GammaUssdService implements IUssdHandler {
         }).catch(err => console.error("Error in background returning voucher processing", err));
 
         return isConsumerSwahili
-          ? "END Asante, vocha inashughulikiwa."
+          ? "END Asante! Vocha yako inashughulikiwa. Utapokea SMS hivi punde kuthibitisha."
           : "END Thank you! Your voucher is being verified. You will receive an SMS confirmation shortly.";
       }
     }
 
     if (option === "2") {
-      return isConsumerSwahili ? "END Ondoka!" : "END Goodbye!";
+      return isConsumerSwahili ? "END Asante kwa kutumia Gamma Rangi na Chapaa!" : "END Thank you for using Gamma Coatings!";
     }
 
     return isConsumerSwahili ? "END Chaguo lisilo sahihi." : "END Invalid option.";
   }
 
+  /**
+   * Sends Welcome & T&C Link SMS upon registration
+   */
+  private async sendOnboardingSms(params: {
+    tenantId: string;
+    phoneNumber: string;
+    language: string;
+    fullName: string;
+  }) {
+    const { tenantId, phoneNumber, language, fullName } = params;
+
+    const [tSettingsRecord] = await Promise.all([
+      db.select().from(tenantSettings).where(eq(tenantSettings.tenantId, tenantId)).limit(1).then(r => r[0]).catch(() => null)
+    ]);
+
+    const creds = (tSettingsRecord?.credentials || {}) as any;
+    const termsUrl = (tSettingsRecord as any)?.termsUrl || (creds as any)?.termsUrl || "https://tuzohub.com/terms";
+
+    const smsConfig = {
+      provider: creds.smsProvider,
+      username: creds.atUsername,
+      apiKey: creds.atApiKey,
+      senderId: creds.atSenderId || creds.bongaSenderId,
+      apiClientID: creds.bongaClientId || creds.bongaApiClientID || creds.apiClientID || creds.oliveClientId,
+      key: creds.bongaApiKey || creds.key || creds.oliveApiKey,
+      secret: creds.bongaApiSecret || creds.secret || creds.oliveApiSecret,
+      serviceID: creds.bongaServiceId || creds.bongaServiceID || creds.serviceID || creds.oliveServiceId || "1",
+    };
+
+    const isSwahili = language === "sw";
+    const welcomeMsg = isSwahili
+      ? `Karibu kwenye Gamma Rangi na Chapaa, ${fullName}! Akaunti yako imefunguliwa. Piga *617*85# wakati wowote kuweka vocha.`
+      : `Welcome to Gamma Rangi na Chapaa, ${fullName}! Your account is active. Dial *617*85# anytime to redeem vouchers.`;
+
+    const termsMsg = isSwahili
+      ? `Tazama Vigezo na Masharti ya Mpango wa Gamma hapa: ${termsUrl}`
+      : `View Gamma Loyalty Program Terms & Conditions here: ${termsUrl}`;
+
+    await SmsService.sendSms({ config: smsConfig, to: phoneNumber, message: `${welcomeMsg}\n\n${termsMsg}` }).catch(err => {
+      console.error("Failed to dispatch onboarding SMS", err);
+    });
+  }
+
+  /**
+   * Instant Cashback Verification & Payout Logic
+   */
   private async verifyVoucherAndSendSms(params: {
     tenantId: string;
     consumerId: string;
@@ -248,32 +313,35 @@ export class GammaUssdService implements IUssdHandler {
     language: string;
     fullName: string;
   }) {
-    const { tenantId, consumerId, enteredCode, phoneNumber, fullName } = params;
+    const { tenantId, consumerId, enteredCode, phoneNumber, language, fullName } = params;
+    const isSwahili = language === "sw";
 
-    // 1. Fetch Tenant Settings for SMS/Daraja config
+    // 1. Fetch Tenant Settings for SMS/Daraja config & Terms URL
     const [tenantRecord, tSettingsRecord] = await Promise.all([
       db.select().from(tenants).where(eq(tenants.id, tenantId)).limit(1).then(r => r[0]),
       db.select().from(tenantSettings).where(eq(tenantSettings.tenantId, tenantId)).limit(1).then(r => r[0]).catch(() => null)
     ]);
 
     const creds = (tSettingsRecord?.credentials || {}) as any;
-    
+    const termsUrl = (tSettingsRecord as any)?.termsUrl || (creds as any)?.termsUrl || "https://tuzohub.com/terms";
+    const autoDisburse = creds.autoDisburse !== false && creds.allowInstantRedemption !== false;
+
     // Resolve SMS configuration
     const smsConfig = {
       provider: creds.smsProvider,
       username: creds.atUsername,
       apiKey: creds.atApiKey,
-      senderId: creds.atSenderId,
-      apiClientID: creds.bongaApiClientID || creds.apiClientID || creds.oliveClientId,
+      senderId: creds.atSenderId || creds.bongaSenderId,
+      apiClientID: creds.bongaClientId || creds.bongaApiClientID || creds.apiClientID || creds.oliveClientId,
       key: creds.bongaApiKey || creds.key || creds.oliveApiKey,
       secret: creds.bongaApiSecret || creds.secret || creds.oliveApiSecret,
-      serviceID: creds.bongaServiceID || creds.serviceID || creds.oliveServiceId || "1",
+      serviceID: creds.bongaServiceId || creds.bongaServiceID || creds.serviceID || creds.oliveServiceId || "1",
     };
 
     const codeHash = crypto.createHash("sha256").update(enteredCode).digest("hex");
 
     try {
-      // Query voucher
+      // Query voucher in DB
       const [voucherRow] = await db.select({
         id: vouchers.id,
         serialNumber: vouchers.serialNumber,
@@ -282,6 +350,7 @@ export class GammaUssdService implements IUssdHandler {
         tenantId: voucherBatches.tenantId,
         productPoints: products.pointsPerUnit,
         productName: products.name,
+        redeemedAt: vouchers.redeemedAt,
       })
       .from(vouchers)
       .innerJoin(voucherBatches, eq(vouchers.batchId, voucherBatches.id))
@@ -289,90 +358,107 @@ export class GammaUssdService implements IUssdHandler {
       .where(eq(vouchers.secureCodeHash, codeHash))
       .limit(1);
 
-      if (!voucherRow) {
-        // Invalid voucher
-        const msg = `Pole, the voucher code ${enteredCode} is invalid or not found. Please check the number and dial *453*34# to try again.`;
+      if (!voucherRow || voucherRow.tenantId !== tenantId) {
+        // INVALID VOUCHER
+        const msg = isSwahili
+          ? `Pole, vocha nambari ${enteredCode} haipo au sio sahihi. Tafadhali hakiki na upige *617*85# kujaribu tena.`
+          : `Pole, the voucher code ${enteredCode} is invalid or not found. Please check the number and dial *617*85# to try again.`;
         await SmsService.sendSms({ config: smsConfig, to: phoneNumber, message: msg });
         return;
       }
 
-      if (voucherRow.tenantId !== tenantId) {
-        const msg = `Pole, the voucher code ${enteredCode} is invalid for this program.`;
+      const vStatus = voucherRow.status as string;
+
+      if (vStatus === "REDEEMED") {
+        // ALREADY REDEEMED
+        const dateStr = voucherRow.redeemedAt ? new Date(voucherRow.redeemedAt).toLocaleDateString() : "";
+        const msg = isSwahili
+          ? `Pole, vocha nambari ${enteredCode} tayari ilishatumiwa${dateStr ? ` tarehe ${dateStr}` : ""}. Tafadhali tumia vocha nyingine halali ya Gamma.`
+          : `Pole, the voucher code ${enteredCode} has already been used${dateStr ? ` on ${dateStr}` : ""}. Please try another valid Gamma voucher.`;
         await SmsService.sendSms({ config: smsConfig, to: phoneNumber, message: msg });
         return;
       }
 
-      if (voucherRow.status === "REDEEMED") {
-        // Voucher already used
-        const msg = `Pole, the voucher code ${enteredCode} has already been used. Please try another valid Gamma voucher.`;
+      if (vStatus === "PENDING") {
+        // ALREADY PENDING IN QUEUE
+        const msg = isSwahili
+          ? `Hujambo ${fullName}, vocha yako ${enteredCode} tayari ipo kwenye foleni ya kushughulikiwa. Utapokea malipo yako hivi punde.`
+          : `Dear ${fullName}, your voucher code ${enteredCode} is already in queue pending processing. Your wallet will be topped up shortly once confirmed.`;
         await SmsService.sendSms({ config: smsConfig, to: phoneNumber, message: msg });
         return;
       }
 
-      if (voucherRow.status !== "ACTIVE") {
-        const msg = `Pole, the voucher code ${enteredCode} is not active. Status: ${voucherRow.status}.`;
+      if (vStatus !== "ACTIVE") {
+        const msg = isSwahili
+          ? `Pole, vocha nambari ${enteredCode} haijawashwa. Hali: ${vStatus}.`
+          : `Pole, the voucher code ${enteredCode} is not active. Status: ${vStatus}.`;
         await SmsService.sendSms({ config: smsConfig, to: phoneNumber, message: msg });
         return;
       }
 
-      // Mark voucher as redeemed and credit points in a transaction
-      const points = voucherRow.productPoints || 50; // default 50 points if not specified
+      // Calculate Cash Amount directly from points / rate
+      const points = voucherRow.productPoints || 50;
       const conversionRate = parseFloat(tenantRecord?.defaultPointValue || "1.0");
-      const amountValue = (points * conversionRate).toString();
+      const cashAmount = (points * conversionRate).toString();
 
-      let finalPoints = points;
-      
-      await db.transaction(async (tx) => {
-        // Update voucher
-        await tx.update(vouchers)
+      // If autoDisburse is disabled or system is queued
+      if (!autoDisburse) {
+        await db.update(vouchers)
+          .set({ status: "PENDING" as any })
+          .where(eq(vouchers.id, voucherRow.id));
+
+        const msg = isSwahili
+          ? `Hujambo ${fullName}, vocha yako ${enteredCode} imepokewa na ipo kwenye foleni ya kushughulikiwa. Malipo yako yatatumwa hivi punde. Vigezo: ${termsUrl}`
+          : `Dear ${fullName}, your voucher ${enteredCode} has been received and queued for processing. Your wallet will be topped up shortly. T&Cs: ${termsUrl}`;
+        await SmsService.sendSms({ config: smsConfig, to: phoneNumber, message: msg });
+        return;
+      }
+
+      // Execute Instant M-Pesa B2C Cashout Payout
+      try {
+        await db.update(vouchers)
           .set({ 
-            status: "REDEEMED",
+            status: "REDEEMED" as any,
             redeemedAt: new Date(),
-            redeemedBy: consumerId
+            redeemedBy: consumerId || null,
           })
           .where(eq(vouchers.id, voucherRow.id));
 
-        // Credit points
-        await LoyaltyService.processEarning({
-          tenantId,
-          consumerId,
-          points: finalPoints.toString(),
-          actionCategory: "VOUCHER_REDEMPTION",
-          description: `Redeemed Gamma voucher ${enteredCode} (Product: ${voucherRow.productName || "Paint"})`,
-        }, tx);
-      });
-
-      // Now attempt Cashout / M-Pesa payout
-      try {
-        // Process redemption
         const { queueItem } = await LoyaltyService.processRedemption({
           tenantId,
-          consumerId,
-          pointsToRedeem: finalPoints.toString(),
+          consumerId: consumerId || "",
+          pointsToRedeem: "0", // Instant cashback does NOT consume points balance
           destinationAccount: phoneNumber,
-          amountValue,
+          amountValue: cashAmount,
           currencyCode: "KES",
           fulfillmentMode: "AUTOMATED_PAYOUT",
-          description: `Auto-cashout for Gamma voucher ${enteredCode}`,
+          description: `Direct instant cashback payout for Gamma voucher ${enteredCode}`,
         }, db);
 
-        // Try to approve/send the payout immediately (automated — no human approver)
         await LoyaltyService.approveRedemption(queueItem.id, tenantId, null as any);
 
-        // If successful, send success SMS
-        const msg = `Hongera! Voucher code ${enteredCode} is valid. Ksh ${amountValue} has been sent to your mobile wallet. Thank you for choosing Gamma Coatings. T&Cs apply: https://tuzohub.com/terms`;
+        // Send Success SMS
+        const msg = isSwahili
+          ? `Hongera ${fullName}! Vocha ${enteredCode} ni halali. Ksh ${cashAmount} imetumwa kwa M-Pesa yako. Asante kwa kuchagua Gamma Coatings. Vigezo: ${termsUrl}`
+          : `Hongera ${fullName}! Voucher code ${enteredCode} is valid. Ksh ${cashAmount} has been sent to your mobile wallet. Thank you for choosing Gamma Coatings. T&Cs: ${termsUrl}`;
         await SmsService.sendSms({ config: smsConfig, to: phoneNumber, message: msg });
 
       } catch (payoutErr: any) {
-        console.error("Payout failed, sending pending SMS", payoutErr);
-        // Payout failed/delayed, send pending SMS
-        const msg = `Dear ${fullName}, your voucher ${enteredCode} has been received and is pending processing. Your wallet will be topped up shortly once confirmed.`;
+        console.error("Instant payout execution queued", payoutErr);
+        // Mark as PENDING in queue if payout gateway delays
+        await db.update(vouchers).set({ status: "PENDING" as any }).where(eq(vouchers.id, voucherRow.id)).catch(() => null);
+
+        const msg = isSwahili
+          ? `Hujambo ${fullName}, vocha yako ${enteredCode} imepokewa na ipo kwenye foleni. Pesa zitatumwa kwa M-Pesa yako hivi punde.`
+          : `Dear ${fullName}, your voucher ${enteredCode} has been received and queued. Your wallet will be topped up shortly once confirmed.`;
         await SmsService.sendSms({ config: smsConfig, to: phoneNumber, message: msg });
       }
 
     } catch (err: any) {
       console.error("Error processing voucher background verification", err);
-      const msg = `Dear ${fullName}, an error occurred while verifying your voucher ${enteredCode}. Please try again later.`;
+      const msg = isSwahili
+        ? `Hujambo ${fullName}, imetokea hitilafu wakati wa kuhakiki vocha yako ${enteredCode}. Tafadhali jaribu tena baadaye.`
+        : `Dear ${fullName}, an error occurred while verifying your voucher ${enteredCode}. Please try again later.`;
       await SmsService.sendSms({ config: smsConfig, to: phoneNumber, message: msg }).catch(e => console.error("Error sending error SMS", e));
     }
   }

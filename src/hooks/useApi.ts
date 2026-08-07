@@ -2,10 +2,33 @@ import { useEffect } from "react";
 import useSWR, { SWRConfiguration } from "swr";
 import { supabase } from "@/lib/supabase";
 
+let cachedToken: string | null = null;
+let tokenExpiryTime: number = 0;
+
+// Listen to auth changes to update cached token immediately
+if (typeof window !== "undefined") {
+  supabase.auth.onAuthStateChange((_event, session) => {
+    cachedToken = session?.access_token || null;
+    tokenExpiryTime = session?.expires_at ? session.expires_at * 1000 - 60000 : Date.now() + 3600000;
+  });
+}
+
+const getFastAuthToken = async () => {
+  if (cachedToken && Date.now() < tokenExpiryTime) {
+    return cachedToken;
+  }
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session?.access_token) {
+    cachedToken = session.access_token;
+    tokenExpiryTime = session.expires_at ? session.expires_at * 1000 - 60000 : Date.now() + 3600000;
+    return cachedToken;
+  }
+  return null;
+};
+
 // Generic fetcher that works with our Hono API structure.
 export const fetcher = async (url: string) => {
-  const { data: { session } } = await supabase.auth.getSession();
-  const token = session?.access_token;
+  const token = await getFastAuthToken();
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 15000);
@@ -25,6 +48,16 @@ export const fetcher = async (url: string) => {
     if (!res.ok) {
       const error = new Error(`API Error: ${res.status}`);
       const info = await res.json().catch(() => ({}));
+
+      if (res.status === 401) {
+        if (typeof window !== "undefined" && !window.location.pathname.startsWith("/auth/")) {
+          window.location.href = "/auth/login";
+        }
+        (error as any).info = info;
+        (error as any).status = 401;
+        throw error;
+      }
+
       console.error(`[API Fetch Error] ${url}`, { status: res.status, info });
       (error as any).info = info;
       (error as any).status = res.status;

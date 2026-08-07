@@ -1,6 +1,6 @@
 import { db } from "../db";
-import { productBatches, products } from "../db/schema";
-import { eq, and, desc, count, ilike, or, inArray, sql } from "drizzle-orm";
+import { productBatches, products, voucherBatches, vouchers } from "../db/schema";
+import { eq, and, desc, count, ilike, or, inArray, isNull, isNotNull, sql } from "drizzle-orm";
 import { AuditService } from "./audit.service";
 
 export class ProductBatchService {
@@ -17,63 +17,7 @@ export class ProductBatchService {
     userId?: string;
   }) {
     return await db.transaction(async (tx) => {
-      let activatedVouchersCount = 0;
-
-      // 1. If voucherBatchIds are provided, handle partial or full card activation
-      if (params.voucherBatchIds && params.voucherBatchIds.length > 0) {
-        const { voucherBatches, vouchers } = require("../db/schema");
-
-        let remainingTinsToAllocate = params.quantityProduced;
-
-        for (const vbId of params.voucherBatchIds) {
-          if (remainingTinsToAllocate <= 0) break;
-
-          // Fetch cards in this batch that are not yet active
-          const batchCards = await tx
-            .select({ id: vouchers.id, serialNumber: vouchers.serialNumber })
-            .from(vouchers)
-            .where(and(eq(vouchers.batchId, vbId), eq(vouchers.status, "PRINTED")))
-            .orderBy(vouchers.serialNumber);
-
-          const cardsToActivate = batchCards.slice(0, remainingTinsToAllocate);
-
-          if (cardsToActivate.length > 0) {
-            const cardIdsToActivate = cardsToActivate.map((c) => c.id);
-
-            await tx
-              .update(vouchers)
-              .set({ status: "ACTIVE" })
-              .where(inArray(vouchers.id, cardIdsToActivate));
-
-            activatedVouchersCount += cardsToActivate.length;
-            remainingTinsToAllocate -= cardsToActivate.length;
-          }
-
-          // Check if all vouchers in the batch are activated now
-          const [unactivatedCount] = await tx
-            .select({ count: count() })
-            .from(vouchers)
-            .where(and(eq(vouchers.batchId, vbId), eq(vouchers.status, "PRINTED")));
-
-          const isFullyActivated = (unactivatedCount?.count ?? 0) === 0;
-
-          await tx
-            .update(voucherBatches)
-            .set({
-              productId: params.productId,
-              campaignId: params.campaignId || null,
-              isActivated: isFullyActivated,
-              activatedAt: isFullyActivated ? new Date() : undefined,
-              activatedBy: params.userId || null,
-              metadata: sql`jsonb_set(COALESCE(metadata, '{}'::jsonb), '{status}', ${
-                isFullyActivated ? '"ACTIVE"' : '"IN_STOCK"'
-              }::jsonb)`,
-            })
-            .where(and(eq(voucherBatches.id, vbId), eq(voucherBatches.tenantId, params.tenantId)));
-        }
-      }
-
-      // 2. Create the production batch record
+      // 1. Insert production batch record first to get ID
       const [batch] = await tx
         .insert(productBatches)
         .values({
@@ -87,14 +31,87 @@ export class ProductBatchService {
           status: params.status || "active",
           metadata: {
             voucherBatchIds: params.voucherBatchIds || [],
-            activatedVouchersCount,
             campaignId: params.campaignId || null,
             createdAt: new Date().toISOString(),
           },
         })
         .returning();
 
-      // Log audit event outside transaction async
+      let activatedVouchersCount = 0;
+
+      // 2. If voucherBatchIds are provided, sequentially allocate UNALLOCATED cards to this production batch
+      if (params.voucherBatchIds && params.voucherBatchIds.length > 0) {
+        let remainingTinsToAllocate = params.quantityProduced;
+
+        for (const vbId of params.voucherBatchIds) {
+          if (remainingTinsToAllocate <= 0) break;
+
+          // Query cards in this voucher batch that have NOT been allocated to any production run yet
+          const unallocatedCards = await tx
+            .select({ id: vouchers.id, serialNumber: vouchers.serialNumber })
+            .from(vouchers)
+            .where(
+              and(
+                eq(vouchers.batchId, vbId),
+                isNull(vouchers.productBatchId),
+                sql`status != 'REDEEMED'`
+              )
+            )
+            .orderBy(vouchers.serialNumber);
+
+          const cardsToAllocate = unallocatedCards.slice(0, remainingTinsToAllocate);
+
+          if (cardsToAllocate.length > 0) {
+            const cardIdsToAllocate = cardsToAllocate.map((c) => c.id);
+
+            // Assign cards to this production run and set status to ACTIVE
+            await tx
+              .update(vouchers)
+              .set({
+                productBatchId: batch.id,
+                status: "ACTIVE" as any,
+              })
+              .where(inArray(vouchers.id, cardIdsToAllocate));
+
+            activatedVouchersCount += cardsToAllocate.length;
+            remainingTinsToAllocate -= cardsToAllocate.length;
+          }
+
+          // Check if all vouchers in the parent batch have been allocated
+          const [unallocatedCount] = await tx
+            .select({ count: count() })
+            .from(vouchers)
+            .where(and(eq(vouchers.batchId, vbId), isNull(vouchers.productBatchId)));
+
+          const isFullyAllocated = (unallocatedCount?.count ?? 0) === 0;
+
+          await tx
+            .update(voucherBatches)
+            .set({
+              productId: params.productId,
+              campaignId: params.campaignId || null,
+              isActivated: isFullyAllocated,
+              activatedAt: isFullyAllocated ? new Date() : undefined,
+              activatedBy: params.userId || null,
+              metadata: sql`jsonb_set(COALESCE(metadata, '{}'::jsonb), '{status}', ${
+                isFullyAllocated ? '"ACTIVE"' : '"IN_STOCK"'
+              }::jsonb)`,
+            })
+            .where(and(eq(voucherBatches.id, vbId), eq(voucherBatches.tenantId, params.tenantId)));
+        }
+      }
+
+      // Update metadata on batch record with actual allocated count
+      const updatedMetadata = {
+        ...(batch.metadata as any),
+        activatedVouchersCount,
+      };
+
+      await tx
+        .update(productBatches)
+        .set({ metadata: updatedMetadata })
+        .where(eq(productBatches.id, batch.id));
+
       AuditService.logEvent({
         tenantId: params.tenantId,
         userId: params.userId,
@@ -111,6 +128,7 @@ export class ProductBatchService {
 
       return {
         ...batch,
+        metadata: updatedMetadata,
         activatedVouchersCount,
       };
     });
@@ -168,9 +186,10 @@ export class ProductBatchService {
   }
 
   /**
-   * Gets a single production batch by ID with deep telemetry & linked voucher details.
+   * Gets a single production batch by ID with deep telemetry & paginated allocated vouchers.
    */
-  static async getBatch(id: string, tenantId: string) {
+  static async getBatch(id: string, tenantId: string, page = 1, limit = 50) {
+    const offset = (page - 1) * limit;
     const batch = await db.query.productBatches.findFirst({
       where: and(eq(productBatches.id, id), eq(productBatches.tenantId, tenantId)),
       with: {
@@ -180,29 +199,83 @@ export class ProductBatchService {
 
     if (!batch) throw new Error("Batch not found or unauthorized");
 
-    // Fetch linked voucher batches & card counts
+    // Fetch exact vouchers allocated to this specific production run
+    const [allocatedVouchers, [totalVouchersCount]] = await Promise.all([
+      db
+        .select({
+          id: vouchers.id,
+          serialNumber: vouchers.serialNumber,
+          status: vouchers.status,
+          redeemedAt: vouchers.redeemedAt,
+          createdAt: vouchers.createdAt,
+          batchNumber: voucherBatches.batchNumber,
+        })
+        .from(vouchers)
+        .leftJoin(voucherBatches, eq(vouchers.batchId, voucherBatches.id))
+        .where(eq(vouchers.productBatchId, id))
+        .orderBy(vouchers.serialNumber)
+        .limit(limit)
+        .offset(offset),
+      db.select({ count: count() }).from(vouchers).where(eq(vouchers.productBatchId, id)),
+    ]);
+
     const meta = (batch.metadata as any) || {};
     const voucherBatchIds: string[] = meta.voucherBatchIds || [];
 
     let linkedBatches: any[] = [];
     if (voucherBatchIds.length > 0) {
-      const { voucherBatches } = require("../db/schema");
-      linkedBatches = await db
+      const rawBatches = await db
         .select({
           id: voucherBatches.id,
           batchNumber: voucherBatches.batchNumber,
           quantity: voucherBatches.quantity,
-          status: voucherBatches.metadata,
+          generated: voucherBatches.generated,
           isActivated: voucherBatches.isActivated,
         })
         .from(voucherBatches)
         .where(inArray(voucherBatches.id, voucherBatchIds));
+
+      linkedBatches = await Promise.all(
+        rawBatches.map(async (b) => {
+          const [thisRunRes] = await db
+            .select({ count: count() })
+            .from(vouchers)
+            .where(and(eq(vouchers.batchId, b.id), eq(vouchers.productBatchId, id)));
+
+          const [totalConsumedRes] = await db
+            .select({ count: count() })
+            .from(vouchers)
+            .where(and(eq(vouchers.batchId, b.id), isNotNull(vouchers.productBatchId)));
+
+          const originalQuantity = b.quantity || 0;
+          const consumedByThisRun = thisRunRes?.count || 0;
+          const consumedTotal = totalConsumedRes?.count || 0;
+          const remainingBalance = Math.max(0, originalQuantity - consumedTotal);
+
+          return {
+            ...b,
+            originalQuantity,
+            consumedByThisRun,
+            consumedTotal,
+            remainingBalance,
+          };
+        })
+      );
     }
+
+    const totalAllocated = totalVouchersCount?.count || 0;
 
     return {
       ...batch,
       linkedBatches,
-      activatedVouchersCount: meta.activatedVouchersCount || 0,
+      allocatedVouchers,
+      allocatedVouchersCount: totalAllocated,
+      pagination: {
+        total: totalAllocated,
+        page,
+        limit,
+        totalPages: Math.ceil(totalAllocated / limit) || 1,
+      },
     };
   }
 }

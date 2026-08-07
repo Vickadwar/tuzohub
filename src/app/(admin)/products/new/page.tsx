@@ -148,23 +148,35 @@ export default function NewProduct() {
     setIsSubmitting(true);
     setError("");
 
-    if (!formData.name.trim() || !formData.sku.trim()) {
-      setError("Product Name and SKU item code are required.");
+    const nameClean = formData.name.trim();
+    let skuClean = formData.sku.trim();
+
+    if (!nameClean) {
+      setError("Product Name is required. Please enter a product name.");
       setIsSubmitting(false);
       return;
     }
 
+    // Auto-generate SKU if user did not specify one manually
+    if (!skuClean) {
+      const prefix = formData.category ? formData.category.substring(0, 3).toUpperCase() : "PRD";
+      const namePart = nameClean.replace(/[^a-zA-Z0-9]/g, "").substring(0, 4).toUpperCase();
+      const randomCode = Math.floor(1000 + Math.random() * 9000);
+      skuClean = `${prefix}-${namePart || "ITEM"}-${randomCode}`;
+      setFormData((prev) => ({ ...prev, sku: skuClean }));
+    }
+
     try {
       const payload = {
-        name: formData.name.trim(),
-        sku: formData.sku.trim(),
+        name: nameClean,
+        sku: skuClean,
         category: formData.category ? formData.category.trim() : null,
         unitOfMeasure: formData.unitOfMeasure ? formData.unitOfMeasure.trim() : null,
         measurementValue: formData.measurementValue ? String(formData.measurementValue) : null,
         pointsPerUnit: parseInt(formData.pointsPerUnit.toString()) || 0,
         price: formData.price.trim() || null,
         costPrice: formData.costPrice.trim() || null,
-        barcode: formData.barcode.trim() || formData.sku.trim(),
+        barcode: formData.barcode.trim() || skuClean,
         brand: formData.brand.trim() || null,
       };
 

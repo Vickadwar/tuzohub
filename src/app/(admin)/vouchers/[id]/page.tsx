@@ -188,6 +188,36 @@ export default function VoucherDetail({ params }: PageProps) {
 
         {/* Right Column — Metrics */}
         <div className="col-span-12 space-y-6 xl:col-span-4">
+          {/* Voucher Points & Value Breakdown */}
+          <div className="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#18181b]">
+            <div className="border-b border-gray-100 px-6 py-5 dark:border-white/5 flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-semibold text-gray-900 dark:text-white">Redemption Reward Value</h3>
+                <p className="text-xs text-gray-400 mt-0.5">Product base points &amp; campaign multiplier</p>
+              </div>
+              <span className="text-sm font-mono font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-xl border border-emerald-500/20">
+                KES {Number(voucher.rewardDenomination || 50).toFixed(2)}
+              </span>
+            </div>
+
+            <div className="p-6 space-y-3 text-xs font-mono">
+              <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-white/[0.02] rounded-xl border border-gray-100 dark:border-white/5">
+                <span className="text-gray-500 dark:text-gray-400 font-sans">Product Base Points:</span>
+                <span className="font-bold text-gray-900 dark:text-white">{voucher.basePoints || 50} PTS</span>
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-white/[0.02] rounded-xl border border-gray-100 dark:border-white/5">
+                <span className="text-gray-500 dark:text-gray-400 font-sans">Campaign Multiplier:</span>
+                <span className="font-bold text-brand-600 dark:text-brand-400">x{voucher.campaignMultiplier || 1.0} Multiplier</span>
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-emerald-500/10 dark:bg-emerald-500/10 rounded-xl border border-emerald-500/20 font-bold">
+                <span className="text-emerald-700 dark:text-emerald-300 font-sans">Effective Payout / Reward:</span>
+                <span className="text-emerald-600 dark:text-emerald-400 text-sm">KES {Number(voucher.rewardDenomination || 50).toFixed(2)}</span>
+              </div>
+            </div>
+          </div>
+
           {/* Key Metrics */}
           <div className="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#18181b]">
             <div className="border-b border-gray-100 px-6 py-5 dark:border-white/5">

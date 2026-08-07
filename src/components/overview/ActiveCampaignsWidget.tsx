@@ -3,8 +3,15 @@ import React from "react";
 import { useApi } from "@/hooks/useApi";
 import Link from "next/link";
 
-export default function ActiveCampaignsWidget() {
-  const { data: stats, isLoading } = useApi("/loyalty/stats/overview");
+interface ActiveCampaignsWidgetProps {
+  stats?: any;
+  isLoading?: boolean;
+}
+
+export default function ActiveCampaignsWidget({ stats: propStats, isLoading: propIsLoading }: ActiveCampaignsWidgetProps = {}) {
+  const { data: apiStats, isLoading: apiIsLoading } = useApi(propStats ? null : "/loyalty/stats/overview");
+  const stats = propStats || apiStats;
+  const isLoading = propIsLoading !== undefined ? propIsLoading : apiIsLoading;
 
   const campaigns = stats?.activeCampaigns || [];
 

@@ -90,25 +90,59 @@ export class LoyaltyService {
     // 1. Find applicable campaign
     const campaign = await CampaignEngine.findApplicableCampaign(context, tx);
 
-    // 2. Fetch tenant default conversion or campaign override
-    // For now, let's assume a default of 1 point per currency unit if no campaign
-    const pointsAmount = CampaignEngine.calculatePoints(context.totalAmount, campaign);
+    // 2. Resolve dynamic fulfillment strategy (Instant, Accumulation, or Hybrid)
+    const fulfillment = CampaignEngine.resolveFulfillment(context.totalAmount, campaign);
 
     // 2.5 Security: Check EARNING Velocity (Fraud Trap)
-    await FraudService.evaluateVelocity(context.tenantId, context.consumerId, Number(pointsAmount), tx);
+    if (fulfillment.calculatedPoints > 0) {
+      await FraudService.evaluateVelocity(context.tenantId, context.consumerId, fulfillment.calculatedPoints, tx);
+    }
 
-    // 3. Delegate to processEarning
-    const transaction = await this.processEarning(
-      {
-        tenantId: context.tenantId,
-        consumerId: context.consumerId,
-        points: pointsAmount.toString(),
-        actionCategory: "PURCHASE",
-        description: campaign ? `Earned via campaign: ${campaign.name}` : "Standard purchase earning",
-        campaignId: campaign?.id,
-      },
-      tx
-    );
+    let transaction: any = null;
+
+    // 3A. Process Points Accumulation (if ACCUMULATION or HYBRID mode)
+    if (fulfillment.fulfillmentMode === "ACCUMULATION" || fulfillment.fulfillmentMode === "HYBRID") {
+      transaction = await this.processEarning(
+        {
+          tenantId: context.tenantId,
+          consumerId: context.consumerId,
+          points: fulfillment.calculatedPoints.toString(),
+          actionCategory: "PURCHASE",
+          description: campaign ? `Earned via campaign: ${campaign.name}` : "Standard purchase earning",
+          campaignId: campaign?.id,
+          metadata: {
+            fulfillmentMode: fulfillment.fulfillmentMode,
+            instantRewardType: fulfillment.instantRewardType,
+            instantValue: fulfillment.instantValue,
+          },
+        },
+        tx
+      );
+    }
+
+    // 3B. Process Instant Fulfillment (if INSTANT or HYBRID mode)
+    if (fulfillment.fulfillmentMode === "INSTANT" || fulfillment.fulfillmentMode === "HYBRID") {
+      const instantValue = fulfillment.instantValue || 0;
+      if (instantValue > 0) {
+        // Fetch consumer phone number for instant payout
+        const [consumerRow] = await tx.select({ phoneNumber: consumers.phoneNumber })
+          .from(consumers)
+          .where(eq(consumers.id, context.consumerId))
+          .limit(1);
+
+        if (consumerRow?.phoneNumber) {
+          const { PayoutGateway } = await import("./payout.gateway");
+          await PayoutGateway.execute({
+            tenantId: context.tenantId,
+            redemptionId: `INSTANT-${Date.now()}`,
+            amount: instantValue,
+            currency: "KES",
+            destination: consumerRow.phoneNumber,
+            fulfillmentStrategy: fulfillment.instantRewardType || "CASHBACK",
+          }).catch(err => console.error("[LoyaltyService] Instant fulfillment error:", err));
+        }
+      }
+    }
 
     // 4. Update Referrals & Gamification
     await ReferralService.completeReferralOnFirstPurchase(context.tenantId, context.consumerId, tx);
@@ -589,10 +623,18 @@ export class LoyaltyService {
     };
   }
 
+  private static overviewStatsCache = new Map<string, { timestamp: number; data: any }>();
+  private static CACHE_TTL_MS = 5000;
+
   /**
    * Aggregates main dashboard metrics for a tenant with high-speed query optimization.
    */
   static async getOverviewStats(tenantId: string) {
+    const cached = LoyaltyService.overviewStatsCache.get(tenantId);
+    if (cached && Date.now() - cached.timestamp < LoyaltyService.CACHE_TTL_MS) {
+      return cached.data;
+    }
+
     const [
       consumerCount,
       pointsIssued,
@@ -771,7 +813,7 @@ export class LoyaltyService {
       if (item.status === "PENDING" || item.status === "PROCESSING") pendingPayoutKes += amt;
     });
 
-    return {
+    const result = {
       metrics: {
         registeredConsumers: consumerCount[0]?.count ?? 0,
         totalPointsIssued: pointsIssued[0]?.total ?? "0",
@@ -800,6 +842,9 @@ export class LoyaltyService {
       geographicReach: geographicReachData,
       chartData: chartData.rows
     };
+
+    LoyaltyService.overviewStatsCache.set(tenantId, { timestamp: Date.now(), data: result });
+    return result;
   }
 
   /**

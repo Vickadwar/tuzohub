@@ -111,15 +111,15 @@ export class MpesaPayoutProvider implements PayoutProvider {
         throw new Error("Daraja credentials not configured for this tenant");
       }
 
-      // 2. Map credentials to DarajaConfig
+      // 2. Map credentials to DarajaConfig dynamically per tenant
       const config = {
-        consumerKey: creds.darajaConsumerKey,
-        consumerSecret: creds.darajaConsumerSecret,
-        shortCode: creds.darajaShortCode,
+        consumerKey: creds.darajaConsumerKey || "PLACEHOLDER",
+        consumerSecret: creds.darajaConsumerSecret || "",
+        shortCode: creds.darajaShortCode || creds.darajaB2cShortcode || creds.shortCode || "600000",
         initiatorName: creds.darajaInitiatorName || "TuZoInitiator",
-        initiatorPassword: "", // Not used in sendPayout currently, we use security credential
+        initiatorPassword: creds.darajaInitiatorPassword || "",
         securityCredential: creds.darajaSecurityCredential || "PLACEHOLDER",
-        baseUrl: creds.darajaBaseUrl || "https://sandbox.safaricom.co.ke",
+        baseUrl: creds.darajaBaseUrl || (creds.darajaEnv === "production" ? "https://api.safaricom.co.ke" : "https://sandbox.safaricom.co.ke"),
         callbackUrl: `${getAppBaseUrl()}/api/mpesa/b2c/callback?tenantId=${request.tenantId}`,
         queueTimeOutUrl: `${getAppBaseUrl()}/api/mpesa/b2c/timeout?tenantId=${request.tenantId}`,
       };
@@ -148,6 +148,8 @@ export class MpesaPayoutProvider implements PayoutProvider {
   }
 }
 
+import { JengaService } from "./jenga.service";
+
 /**
  * JengaPayoutProvider executing bank/mobile disbursements via Equity Jenga API.
  */
@@ -156,12 +158,29 @@ export class JengaPayoutProvider implements PayoutProvider {
 
   async executePayout(request: PayoutRequest): Promise<PayoutResponse> {
     try {
-      console.log(`[JengaProvider] Executing Jenga API payout of ${request.amount} ${request.currency} to ${request.destination}`);
-      // Simulate or execute Jenga payout
+      const tSettingsRecords = await db.select().from(tenantSettings).where(eq(tenantSettings.tenantId, request.tenantId)).limit(1);
+      const creds = (tSettingsRecords[0]?.credentials || {}) as any;
+
+      const config = {
+        apiKey: creds.jengaApiKey || creds.apiKey || "PLACEHOLDER",
+        merchantCode: creds.jengaMerchantCode || creds.merchantCode || "DEFAULT_MERCHANT",
+        consumerSecret: creds.jengaConsumerSecret || creds.consumerSecret,
+        accountNumber: creds.jengaAccountNo || creds.accountNumber || "0000000000",
+        environment: creds.jengaEnv || "sandbox",
+      };
+
+      const result = await JengaService.sendMobilePayout({
+        config,
+        amount: request.amount,
+        currency: request.currency || "KES",
+        phoneNumber: request.destination,
+        remarks: `Redemption ${request.redemptionId}`,
+      });
+
       return {
         success: true,
-        externalReference: "JENGA-" + Math.random().toString(36).substring(2, 9).toUpperCase(),
-        rawResponse: { status: "simulated_jenga_success" },
+        externalReference: result.transactionId || result.referenceNumber || `JENGA-${Date.now()}`,
+        rawResponse: result,
       };
     } catch (error: any) {
       console.error(`[JengaProvider] Payout failed: ${error.message}`);

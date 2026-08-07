@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { SystemService } from "../../services/system.service";
+import { TenantService } from "../../services/tenant.service";
 import { withScopedDb } from "../../db";
 
 const app = new Hono<{ Variables: { user: any } }>();
@@ -105,6 +106,28 @@ app.post("/tenants/:id/status", async (c) => {
   try {
     const data = await SystemService.setTenantStatus(id, body.status);
     return c.json({ success: true, data });
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 400);
+  }
+});
+
+app.put("/tenants/:id/telco-config", async (c) => {
+  const id = c.req.param("id");
+  const body = await c.req.json();
+  try {
+    const targetTenant = await TenantService.getTenantById(id);
+    if (!targetTenant) {
+      return c.json({ success: false, error: "Tenant not found" }, 404);
+    }
+
+    const updated = await TenantService.updateTenantSettings(targetTenant.slug, {
+      ussdHandlerStrategy: body.ussdHandlerStrategy,
+      primaryShortcode: body.primaryShortcode,
+      sharedSubPrefix: body.sharedSubPrefix,
+      credentials: body.credentials ? { ...((targetTenant as any).settings?.credentials || {}), ...body.credentials } : undefined,
+    });
+
+    return c.json({ success: true, data: updated });
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 400);
   }

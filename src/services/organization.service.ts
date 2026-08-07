@@ -1,9 +1,10 @@
 import { db } from "../db";
-import { organizations, organizationMembers, consumers } from "../db/schema";
+import { organizations, organizationMembers, consumers, towns, regions, salesHierarchy, salesHierarchyAssignments } from "../db/schema";
 import { eq, and, isNull } from "drizzle-orm";
+import { v4 as uuidv4 } from "uuid";
 
 export class OrganizationService {
-  static async createOrganization(data: typeof organizations.$inferInsert, tx: any = db) {
+  static async createOrganization(data: any, tx: any = db) {
     const result = await tx.insert(organizations).values(data).returning();
     return result[0];
   }
@@ -20,21 +21,81 @@ export class OrganizationService {
     ).limit(1);
 
     if (records.length === 0) throw new Error("Organization not found");
-    return records[0];
+    const org = records[0];
+
+    // Fetch town details
+    let town: any = null;
+    let region: any = null;
+    if (org.townId) {
+      const townRecords = await tx.select().from(towns).where(eq(towns.id, org.townId)).limit(1);
+      if (townRecords.length > 0) {
+        town = townRecords[0];
+        if (town.regionId) {
+          const regionRecords = await tx.select().from(regions).where(eq(regions.id, town.regionId)).limit(1);
+          if (regionRecords.length > 0) {
+            region = regionRecords[0];
+          }
+        }
+      }
+    }
+
+    // Fetch assigned sales person
+    let salesStaff: any = null;
+    let salesPersonId: string | null = null;
+    const assignRecords = await tx.select()
+      .from(salesHierarchyAssignments)
+      .where(eq(salesHierarchyAssignments.organizationId, id))
+      .limit(1);
+
+    if (assignRecords.length > 0 && assignRecords[0].staffId) {
+      const targetStaffId = assignRecords[0].staffId;
+      salesPersonId = targetStaffId;
+      const staffRecords = await tx.select().from(salesHierarchy).where(eq(salesHierarchy.id, targetStaffId)).limit(1);
+      if (staffRecords.length > 0) {
+        salesStaff = staffRecords[0];
+      }
+    }
+
+    return {
+      ...org,
+      town,
+      region,
+      regionId: region?.id || null,
+      salesStaff,
+      salesPersonId,
+    };
   }
 
-  static async updateOrganization(id: string, tenantId: string, updates: Partial<typeof organizations.$inferInsert>, tx: any = db) {
+  static async updateOrganization(id: string, tenantId: string, updates: any, tx: any = db) {
+    const { salesPersonId, regionId, ...orgFields } = updates;
+
     const result = await tx.update(organizations)
-      .set({ ...updates, updatedAt: new Date() })
+      .set({ ...orgFields, updatedAt: new Date() })
       .where(and(eq(organizations.id, id), eq(organizations.tenantId, tenantId)))
       .returning();
 
     if (result.length === 0) throw new Error("Organization not found or failed to update");
-    return result[0];
+    const updatedOrg = result[0];
+
+    // Update sales staff assignment if provided
+    if (salesPersonId !== undefined) {
+      await tx.delete(salesHierarchyAssignments)
+        .where(eq(salesHierarchyAssignments.organizationId, id));
+
+      if (salesPersonId && salesPersonId.trim()) {
+        await tx.insert(salesHierarchyAssignments).values({
+          id: uuidv4(),
+          tenantId,
+          staffId: salesPersonId.trim(),
+          organizationId: id,
+        });
+      }
+    }
+
+    return await this.getOrganizationById(id, tenantId, tx);
   }
 
   static async addMember(organizationId: string, consumerId: string, role: string, tx: any = db) {
-    // Ensure consumer exists
     const consumerRecords = await tx.select().from(consumers).where(eq(consumers.id, consumerId)).limit(1);
     if (consumerRecords.length === 0) throw new Error("Consumer not found");
 
@@ -77,6 +138,16 @@ export class OrganizationService {
       .returning();
     
     if (result.length === 0) throw new Error("Member not found or already removed");
+    return result[0];
+  }
+
+  static async deleteOrganization(id: string, tenantId: string, tx: any = db) {
+    const result = await tx.update(organizations)
+      .set({ deletedAt: new Date(), updatedAt: new Date() })
+      .where(and(eq(organizations.id, id), eq(organizations.tenantId, tenantId)))
+      .returning();
+
+    if (result.length === 0) throw new Error("Organization not found or already deleted");
     return result[0];
   }
 }

@@ -1,9 +1,44 @@
-import { Hono } from "hono";
+import { Context, Hono } from "hono";
 import { ProductService } from "../../services/product.service";
 import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
+import { db } from "../../db";
+import { tenants, users } from "../../db/schema";
+import { eq } from "drizzle-orm";
+import { supabase } from "../../lib/supabase";
 
 const app = new Hono<{ Variables: { user: any } }>();
+
+async function resolveTenantId(c: Context) {
+  const user = c.get("user");
+  
+  // Allow SYSTEM_ADMIN to explicitly scope to a tenant via query param
+  if (user?.role === "SYSTEM_ADMIN" && c.req.query("tenantId")) {
+    return c.req.query("tenantId");
+  }
+
+  if (user?.tenantId) {
+    return user.tenantId;
+  }
+
+  const authHeader = c.req.header("Authorization");
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    try {
+      const token = authHeader.split(" ")[1];
+      const { data: { user: authUser } } = await supabase.auth.getUser(token);
+      if (authUser) {
+        const dbUser = await db.query.users.findFirst({
+          where: eq(users.id, authUser.id)
+        });
+        if (dbUser?.tenantId) return dbUser.tenantId;
+      }
+    } catch (e) {
+      console.warn("[Products resolveTenantId] Auth token error:", e);
+    }
+  }
+
+  return null;
+}
 
 const productSchema = z.object({
   sku: z.string().min(1, "SKU is required"),
@@ -25,19 +60,19 @@ const productSchema = z.object({
  * Returns paginated list of products for the tenant.
  */
 app.get("/", async (c) => {
-  const user = c.get("user");
+  const tenantId = await resolveTenantId(c);
   const page = parseInt(c.req.query("page") || "1");
-  const limit = parseInt(c.req.query("limit") || "10");
+  const limit = parseInt(c.req.query("limit") || "200");
   const search = c.req.query("search");
   const category = c.req.query("category");
 
-  if (!user.tenantId) {
-    return c.json({ success: false, error: "User tenant not found" }, 403);
+  if (!tenantId) {
+    return c.json({ success: false, error: "Tenant reference not found" }, 403);
   }
 
   try {
     const result = await ProductService.listProducts({
-      tenantId: user.tenantId,
+      tenantId,
       page,
       limit,
       search,
@@ -54,13 +89,13 @@ app.get("/", async (c) => {
  * Returns dynamic categories and units of measure for the tenant.
  */
 app.get("/meta/categories-uom", async (c) => {
-  const user = c.get("user");
-  if (!user.tenantId) {
-    return c.json({ success: false, error: "User tenant not found" }, 403);
+  const tenantId = await resolveTenantId(c);
+  if (!tenantId) {
+    return c.json({ success: false, error: "Tenant reference not found" }, 403);
   }
 
   try {
-    const data = await ProductService.getCategoriesAndUoms(user.tenantId);
+    const data = await ProductService.getCategoriesAndUoms(tenantId);
     return c.json({ success: true, data });
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 400);
@@ -72,13 +107,13 @@ app.get("/meta/categories-uom", async (c) => {
  * Returns inventory & catalog settings breakdown.
  */
 app.get("/settings", async (c) => {
-  const user = c.get("user");
-  if (!user.tenantId) {
-    return c.json({ success: false, error: "User tenant not found" }, 403);
+  const tenantId = await resolveTenantId(c);
+  if (!tenantId) {
+    return c.json({ success: false, error: "Tenant reference not found" }, 403);
   }
 
   try {
-    const data = await ProductService.getInventorySettings(user.tenantId);
+    const data = await ProductService.getInventorySettings(tenantId);
     return c.json({ success: true, data });
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 400);
@@ -162,17 +197,17 @@ app.delete("/settings/uoms/:id", async (c) => {
  * Creates a new product.
  */
 app.post("/", zValidator("json", productSchema), async (c) => {
-  const user = c.get("user");
+  const tenantId = await resolveTenantId(c);
   const body = c.req.valid("json");
 
-  if (!user.tenantId) {
-    return c.json({ success: false, error: "User tenant not found" }, 403);
+  if (!tenantId) {
+    return c.json({ success: false, error: "Tenant reference not found" }, 403);
   }
 
   try {
     const product = await ProductService.createProduct({
       ...body,
-      tenantId: user.tenantId,
+      tenantId,
     } as any);
     return c.json({ success: true, data: product });
   } catch (error: any) {
@@ -184,11 +219,15 @@ app.post("/", zValidator("json", productSchema), async (c) => {
  * GET /api/products/:id
  */
 app.get("/:id", async (c) => {
-  const user = c.get("user");
+  const tenantId = await resolveTenantId(c);
   const id = c.req.param("id");
 
+  if (!tenantId) {
+    return c.json({ success: false, error: "Tenant reference not found" }, 403);
+  }
+
   try {
-    const product = await ProductService.getProduct(id, user.tenantId);
+    const product = await ProductService.getProduct(id, tenantId);
     return c.json({ success: true, data: product });
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 404);
@@ -199,12 +238,16 @@ app.get("/:id", async (c) => {
  * PATCH /api/products/:id
  */
 app.patch("/:id", zValidator("json", productSchema.partial()), async (c) => {
-  const user = c.get("user");
+  const tenantId = await resolveTenantId(c);
   const id = c.req.param("id");
   const body = c.req.valid("json");
 
+  if (!tenantId) {
+    return c.json({ success: false, error: "Tenant reference not found" }, 403);
+  }
+
   try {
-    const product = await ProductService.updateProduct(id, user.tenantId, body as any);
+    const product = await ProductService.updateProduct(id, tenantId, body as any);
     return c.json({ success: true, data: product });
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 400);
@@ -215,11 +258,15 @@ app.patch("/:id", zValidator("json", productSchema.partial()), async (c) => {
  * DELETE /api/products/:id
  */
 app.delete("/:id", async (c) => {
-  const user = c.get("user");
+  const tenantId = await resolveTenantId(c);
   const id = c.req.param("id");
 
+  if (!tenantId) {
+    return c.json({ success: false, error: "Tenant reference not found" }, 403);
+  }
+
   try {
-    const deleted = await ProductService.deleteProduct(id, user.tenantId);
+    const deleted = await ProductService.deleteProduct(id, tenantId);
     return c.json({ success: true, message: "Product deleted successfully", data: deleted });
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 400);

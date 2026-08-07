@@ -21,11 +21,15 @@ export default function ProductionBatches() {
   const { data: campaignRes } = useApi<any>("/campaigns");
   const campaigns = Array.isArray(campaignRes) ? campaignRes : (campaignRes?.data || []);
   
-  // Only IN_STOCK voucher batches (delivered to warehouse) can be loaded into production tins
+  // Only IN_STOCK voucher batches (printed and brought to factory warehouse) can be loaded into production tins
   const { data: voucherBatchesRes, mutate: mutateVouchers } = useApi<any>("/vouchers/batches");
   const voucherBatchesArray = Array.isArray(voucherBatchesRes) ? voucherBatchesRes : (voucherBatchesRes?.data || []);
   const availableStockBatches: any[] = voucherBatchesArray.filter(
-    (b: any) => !b.isActivated && (b.status === "IN_STOCK" || b.metadata?.status === "IN_STOCK")
+    (b: any) => {
+      const metaStatus = b.metadata?.status;
+      const status = b.status;
+      return (metaStatus === "IN_STOCK" || status === "IN_STOCK") && !b.isActivated;
+    }
   );
 
   const [showNewForm, setShowNewForm] = useState(false);
@@ -208,13 +212,16 @@ export default function ProductionBatches() {
                     ...availableStockBatches
                       .filter((b: any) => !formData.voucherBatchIds.includes(b.id))
                       .map((b: any) => {
+                        const original = b.originalQuantity ?? b.quantity ?? 0;
+                        const remaining = b.remainingBalance ?? b.unallocatedCount ?? original;
+                        const consumed = b.consumedCount ?? b.allocatedCount ?? Math.max(0, original - remaining);
                         const isValue = b.metadata?.batchType === "VALUE_BASED" || !b.productId;
                         const labelDetail = isValue
                           ? `Generic Pool (KES ${b.metadata?.rewardDenomination || "50"})`
                           : (b.productName || "SKU Bound");
                         return {
                           value: b.id,
-                          label: `${b.batchNumber}  ·  ${b.quantity} cards  ·  ${labelDetail}`
+                          label: `${b.batchNumber}  ·  ${remaining.toLocaleString()} cards remaining  (Original: ${original.toLocaleString()} · Consumed: ${consumed.toLocaleString()})  ·  ${labelDetail}`
                         };
                       })
                   ]}
@@ -238,10 +245,14 @@ export default function ProductionBatches() {
                   <div className="flex flex-wrap gap-2 pt-1">
                     {formData.voucherBatchIds.map(id => {
                       const batch = availableStockBatches.find((b: any) => b.id === id) || voucherBatchesArray.find((b: any) => b.id === id);
+                      const original = batch?.originalQuantity ?? batch?.quantity ?? 0;
+                      const remaining = batch?.remainingBalance ?? batch?.unallocatedCount ?? original;
                       return (
-                        <div key={id} className="flex items-center gap-1.5 bg-brand-500/10 border border-brand-500/20 px-3 py-1 rounded-full">
-                          <span className="text-xs font-bold text-brand-600 dark:text-brand-400">{batch?.batchNumber || "Unknown Batch"}</span>
-                          <span className="text-[10px] text-gray-400 border-l border-brand-500/20 pl-1.5">{batch?.quantity || "?"} cards</span>
+                        <div key={id} className="flex items-center gap-2 bg-brand-500/10 border border-brand-500/20 px-3.5 py-1.5 rounded-xl">
+                          <span className="text-xs font-bold font-mono text-brand-600 dark:text-brand-400">{batch?.batchNumber || "Unknown Batch"}</span>
+                          <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 border-l border-brand-500/20 pl-2 font-mono">
+                            {remaining.toLocaleString()} cards remaining <span className="text-gray-400 text-[10px] font-sans">(Original: {original.toLocaleString()})</span>
+                          </span>
                           <button
                             type="button"
                             onClick={() => setFormData(f => ({ ...f, voucherBatchIds: f.voucherBatchIds.filter(vId => vId !== id) }))}

@@ -22,9 +22,8 @@ export default function OrganizationsPage() {
     const load = async () => {
       try {
         const res = await authenticatedFetch("/api/organizations");
-        if (res.success) {
-          setOrganizations(res.data || []);
-        }
+        const list = Array.isArray(res) ? res : (res?.data || []);
+        setOrganizations(list);
       } catch (err: any) {
         setError(err.message || "Failed to load organizations.");
       } finally {
