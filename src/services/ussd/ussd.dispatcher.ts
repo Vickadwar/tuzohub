@@ -57,23 +57,16 @@ export class UssdDispatcher {
 
     // 3. Fallback for Staging: Default to Gamma Coatings or first available tenant
     if (!resolvedTenantId) {
-      const fallbackTenant = await db.select().from(tenants)
-        .where(eq(tenants.slug, "gamma-coatings"))
-        .limit(1)
-        .then(r => r[0])
-        .catch(() => null);
-      
-      const alternativeGamma = await db.select().from(tenants).where(eq(tenants.slug, "gamma")).limit(1).then(r => r[0]).catch(() => null);
+      const allTenants = await db.select().from(tenants).catch(() => []);
+      const fallbackTenant = allTenants.find(t => t.slug === "gamma-coatings");
+      const alternativeGamma = allTenants.find(t => t.slug.includes("gamma"));
 
       if (fallbackTenant) {
         resolvedTenantId = fallbackTenant.id;
       } else if (alternativeGamma) {
         resolvedTenantId = alternativeGamma.id;
-      } else {
-        const firstTenant = await db.select().from(tenants).limit(1).then(r => r[0]).catch(() => null);
-        if (firstTenant) {
-          resolvedTenantId = firstTenant.id;
-        }
+      } else if (allTenants.length > 0) {
+        resolvedTenantId = allTenants[0].id;
       }
     }
 
@@ -109,7 +102,7 @@ export class UssdDispatcher {
     const slug = (tenantRecord?.slug || "").toLowerCase();
     
     let handler: IUssdHandler;
-    if (strategy === "GAMMA_COATINGS" || strategy === "GAMMA" || slug === "gamma-coatings" || slug === "gamma") {
+    if (strategy === "GAMMA_COATINGS" || strategy === "GAMMA" || slug.includes("gamma")) {
       handler = new GammaUssdService();
     } else if (this.HANDLERS[strategy]) {
       handler = this.HANDLERS[strategy];
