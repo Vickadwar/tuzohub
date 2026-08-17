@@ -197,6 +197,10 @@ app.post("/b2c/callback", async (c) => {
   return c.json({ ResultCode: 0, ResultDesc: "Success" });
 });
 
+// Route aliases for Safaricom B2C callbacks (supporting /b2c/result and /b2c/queue-timeout)
+app.post("/b2c/result", async (c) => app.fetch(new Request(c.req.url.replace("/b2c/result", "/b2c/callback"), c.req.raw)));
+app.post("/b2c/queue-timeout", async (c) => app.fetch(new Request(c.req.url.replace("/b2c/queue-timeout", "/b2c/timeout"), c.req.raw)));
+
 /**
  * Daraja B2C Timeout Callback
  * Safaricom calls this if the B2C request times out before being processed.
@@ -225,6 +229,7 @@ app.post("/b2c/timeout", async (c) => {
 
   return c.json({ ResultCode: 0, ResultDesc: "Accepted" });
 });
+
 /**
  * GET /api/mpesa/balance
  * Returns the current live stored M-Pesa float balances and configured shortcode for the tenant.
@@ -240,8 +245,8 @@ app.get("/balance", async (c) => {
     const tSettingsRecords = await db.select().from(tenantSettings).where(eq(tenantSettings.tenantId, tenantId)).limit(1);
     const creds = (tSettingsRecords[0]?.credentials || {}) as any;
 
-    const isConfigured = Boolean(creds.darajaConsumerKey || creds.darajaShortCode);
-    const shortCode = creds.darajaShortCode || creds.shortCode || creds.b2cShortcode || null;
+    const shortCode = creds.darajaShortCode || creds.darajaShortcode || creds.darajaB2cShortcode || creds.shortCode || null;
+    const isConfigured = Boolean(creds.darajaConsumerKey && shortCode);
 
     const storedBalance = creds?.floatBalance || {};
 
@@ -252,7 +257,7 @@ app.get("/balance", async (c) => {
       charge: storedBalance.charge || (isConfigured ? "Pending Query" : "Unconfigured"),
       lastCheckedAt: storedBalance.lastCheckedAt || null,
       isConfigured,
-      environment: creds.darajaBaseUrl?.includes("sandbox") ? "Sandbox" : isConfigured ? "Production" : "Unconfigured"
+      environment: creds.darajaBaseUrl?.includes("sandbox") || creds.darajaEnv === "sandbox" ? "Sandbox" : isConfigured ? "Production" : "Unconfigured"
     };
 
     return c.json({ success: true, data: responseData });
@@ -282,12 +287,13 @@ app.post("/balance/query", async (c) => {
 
     const config = {
       consumerKey: creds.darajaConsumerKey,
-      consumerSecret: creds.darajaConsumerSecret,
-      shortCode: creds.darajaShortCode,
+      consumerSecret: creds.darajaConsumerSecret || "",
+      shortCode: creds.darajaShortCode || creds.darajaShortcode || creds.darajaB2cShortcode || creds.shortCode || "600000",
       initiatorName: creds.darajaInitiatorName || "TuZoInitiator",
-      initiatorPassword: "",
-      securityCredential: creds.darajaSecurityCredential || "PLACEHOLDER",
-      baseUrl: creds.darajaBaseUrl || "https://sandbox.safaricom.co.ke",
+      initiatorPassword: creds.darajaInitiatorPassword || creds.darajaPassword || "",
+      securityCredential: creds.darajaSecurityCredential || "",
+      certificatePem: creds.certificatePem || creds.darajaCertificatePem || undefined,
+      baseUrl: creds.darajaBaseUrl || (creds.darajaEnv === "production" ? "https://api.safaricom.co.ke" : "https://sandbox.safaricom.co.ke"),
       callbackUrl: `${getAppBaseUrl()}/api/mpesa/balance/callback?tenantId=${tenantId}`,
       queueTimeOutUrl: `${getAppBaseUrl()}/api/mpesa/balance/timeout?tenantId=${tenantId}`,
     };

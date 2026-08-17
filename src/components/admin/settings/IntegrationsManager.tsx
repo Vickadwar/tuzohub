@@ -151,12 +151,23 @@ export default function IntegrationsManager({
   const [testingDaraja, setTestingDaraja] = useState(false);
   const [darajaTestResult, setDarajaTestResult] = useState<{ success: boolean; message: string } | null>(null);
 
+  const [testPayoutPhone, setTestPayoutPhone] = useState("");
+  const [testPayoutAmount, setTestPayoutAmount] = useState("10");
+  const [firingTestPayout, setFiringTestPayout] = useState(false);
+  const [testPayoutResult, setTestPayoutResult] = useState<{ success: boolean; message: string } | null>(null);
+
   const darajaEnv = credentials.darajaEnv || "sandbox";
 
   const updateField = (key: string, val: any) => {
+    const extra = (key === "darajaShortcode" || key === "darajaShortCode")
+      ? { darajaShortcode: val, darajaShortCode: val }
+      : (key === "darajaInitiatorPassword" || key === "darajaPassword")
+        ? { darajaInitiatorPassword: val, darajaPassword: val }
+        : {};
     onChange({
       ...credentials,
       [key]: val,
+      ...extra,
     });
   };
 
@@ -183,6 +194,40 @@ export default function IntegrationsManager({
       setDarajaTestResult({ success: false, message: err.message || "Network error" });
     } finally {
       setTestingDaraja(false);
+    }
+  };
+
+  const handleFireTestPayout = async () => {
+    if (!testPayoutPhone.trim() || !testPayoutAmount || Number(testPayoutAmount) <= 0) {
+      setTestPayoutResult({ success: false, message: "Please enter a valid phone number and positive test amount." });
+      return;
+    }
+    setFiringTestPayout(true);
+    setTestPayoutResult(null);
+    try {
+      const res = await fetch("/api/mpesa/manual-payout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phoneNumber: testPayoutPhone,
+          amount: Number(testPayoutAmount),
+          remarks: "Daraja B2C Integration Test",
+          tenantId: tenantId || tenantSlug,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setTestPayoutResult({
+          success: true,
+          message: data.message || `Payout of KES ${testPayoutAmount} dispatched! Ref: ${data.externalReference || "Accepted"}`
+        });
+      } else {
+        setTestPayoutResult({ success: false, message: data.error || "Payout dispatch failed" });
+      }
+    } catch (err: any) {
+      setTestPayoutResult({ success: false, message: err.message || "Failed to fire test transaction" });
+    } finally {
+      setFiringTestPayout(false);
     }
   };
 
@@ -548,49 +593,53 @@ export default function IntegrationsManager({
                     </Field>
 
                     <Field
-                      label={`B2C Initiator Name (${darajaEnv === "production" ? "Production" : "Sandbox"})`}
-                      hint={darajaEnv === "production" ? "Live production initiator username registered on Safaricom portal" : "Sandbox test initiator name (e.g. test_api)"}
+                      label={`B2C Initiator Password (${darajaEnv === "production" ? "Production" : "Sandbox"})`}
+                      hint={darajaEnv === "production" ? "Plaintext initiator password (automatically encrypted using Safaricom Public Cert)" : "Sandbox test password (e.g. Ndemo92#)"}
                     >
-                      <TextInput
-                        value={credentials.darajaInitiatorName || ""}
-                        onChange={(val) => updateField("darajaInitiatorName", val)}
-                        placeholder={darajaEnv === "production" ? "live_initiator_username" : "test_api"}
-                      />
-                    </Field>
-
-                    <Field
-                      label={`Paybill / B2C Shortcode (${darajaEnv === "production" ? "Production" : "Sandbox"})`}
-                      hint={darajaEnv === "production" ? "Live production B2C Paybill / Shortcode assigned by Safaricom" : "Sandbox test shortcode (e.g. 600000)"}
-                    >
-                      <TextInput
-                        value={credentials.darajaShortcode || ""}
-                        onChange={(val) => updateField("darajaShortcode", val)}
-                        placeholder={darajaEnv === "production" ? "601234" : "600000"}
+                      <SecretInput
+                        value={credentials.darajaInitiatorPassword || credentials.darajaPassword || ""}
+                        onChange={(val) => updateField("darajaInitiatorPassword", val)}
+                        placeholder={darajaEnv === "production" ? "Live initiator password" : "Ndemo92#"}
                       />
                     </Field>
 
                     <div className="col-span-1 sm:col-span-2">
                       <Field
-                        label={`Security Credential (${darajaEnv === "production" ? "Production Encrypted Certificate" : "Sandbox Password"})`}
-                        hint={darajaEnv === "production" ? "Encrypted security credential generated using Safaricom Production Certificate" : "Sandbox password or security credential string"}
+                        label={`Security Credential (${darajaEnv === "production" ? "Pre-encrypted String" : "Optional Pre-encrypted"})`}
+                        hint={darajaEnv === "production" ? "Pre-encrypted security credential string (leave blank if password entered above)" : "Optional pre-encrypted credential base64"}
                       >
                         <SecretInput
                           multiline
-                          rows={3}
+                          rows={2}
                           value={credentials.darajaSecurityCredential || ""}
                           onChange={(val) => updateField("darajaSecurityCredential", val)}
-                          placeholder={darajaEnv === "production" ? "Production encrypted certificate string..." : "Sandbox security credential string..."}
+                          placeholder="Optional pre-encrypted base64 RSA string..."
+                        />
+                      </Field>
+                    </div>
+
+                    <div className="col-span-1 sm:col-span-2">
+                      <Field
+                        label="Custom Safaricom Public Certificate (PEM format - Optional)"
+                        hint="Upload or paste custom Safaricom X.509 certificate PEM if using custom operator portal"
+                      >
+                        <SecretInput
+                          multiline
+                          rows={2}
+                          value={credentials.certificatePem || credentials.darajaCertificatePem || ""}
+                          onChange={(val) => updateField("certificatePem", val)}
+                          placeholder="-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----"
                         />
                       </Field>
                     </div>
                   </div>
 
-                  <div className="pt-2 flex items-center justify-between">
+                  <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-t border-gray-200 dark:border-gray-800 pt-4">
                     <button
                       type="button"
                       onClick={handleTestDaraja}
                       disabled={testingDaraja}
-                      className="px-4 py-2 bg-gray-900 hover:bg-gray-800 dark:bg-white dark:hover:bg-gray-100 text-white dark:text-gray-900 text-xs font-semibold rounded-lg shadow-xs transition disabled:opacity-50 flex items-center gap-2"
+                      className="px-4 py-2 bg-gray-900 hover:bg-gray-800 dark:bg-white dark:hover:bg-gray-100 text-white dark:text-gray-900 text-xs font-semibold rounded-lg shadow-xs transition disabled:opacity-50 flex items-center justify-center gap-2"
                     >
                       {testingDaraja ? (
                         <>
@@ -598,10 +647,10 @@ export default function IntegrationsManager({
                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                           </svg>
-                          Testing M-Pesa Connection...
+                          Testing Connection...
                         </>
                       ) : (
-                        `Test ${darajaEnv === "production" ? "Production" : "Sandbox"} M-Pesa Connection`
+                        `Test ${darajaEnv === "production" ? "Production" : "Sandbox"} M-Pesa OAuth`
                       )}
                     </button>
 
@@ -609,6 +658,65 @@ export default function IntegrationsManager({
                       <span className={`text-xs font-semibold ${darajaTestResult.success ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
                         {darajaTestResult.message}
                       </span>
+                    )}
+                  </div>
+
+                  {/* Quick Test Transaction Panel */}
+                  <div className="mt-4 p-4 rounded-xl border border-brand-500/20 bg-brand-50/50 dark:bg-brand-950/10 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="text-xs font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
+                          <span className="flex h-2 w-2 rounded-full bg-brand-500"></span>
+                          Fire Quick B2C Test Payout
+                        </h4>
+                        <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                          Dispatches an instant B2C cash transaction via Daraja to verify end-to-end flow.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row items-center gap-3">
+                      <input
+                        type="text"
+                        placeholder="Recipient phone (e.g. 254712345678)"
+                        value={testPayoutPhone}
+                        onChange={(e) => setTestPayoutPhone(e.target.value)}
+                        className="w-full sm:w-64 px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-xs font-mono text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                      />
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs font-semibold text-gray-500">KES</span>
+                        <input
+                          type="number"
+                          placeholder="Amount"
+                          value={testPayoutAmount}
+                          onChange={(e) => setTestPayoutAmount(e.target.value)}
+                          className="w-24 px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-xs font-mono text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleFireTestPayout}
+                        disabled={firingTestPayout}
+                        className="w-full sm:w-auto px-4 py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold rounded-lg transition disabled:opacity-50 flex items-center justify-center gap-1.5 shadow-sm"
+                      >
+                        {firingTestPayout ? (
+                          <>
+                            <svg className="w-3.5 h-3.5 animate-spin text-white" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                            </svg>
+                            Firing Payout...
+                          </>
+                        ) : (
+                          "Fire Payout Now"
+                        )}
+                      </button>
+                    </div>
+
+                    {testPayoutResult && (
+                      <div className={`p-2.5 rounded-lg text-xs font-medium ${testPayoutResult.success ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800" : "bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800"}`}>
+                        {testPayoutResult.message}
+                      </div>
                     )}
                   </div>
                 </>

@@ -10,6 +10,7 @@ import { GamificationService } from "./gamification.service";
 import { ReferralService } from "./referral.service";
 import { DarajaConfig } from "./daraja.service";
 import { tenantSettings } from "../db/schema";
+import { getAppBaseUrl } from "../lib/domain";
 
 export class LoyaltyService {
   /**
@@ -286,14 +287,15 @@ export class LoyaltyService {
       // 2.1 Trigger Payout (Daraja)
       const darajaConfig: DarajaConfig = {
         consumerKey: creds.darajaConsumerKey || process.env.DARAJA_CONSUMER_KEY || "PLACEHOLDER",
-        consumerSecret: creds.darajaConsumerSecret || process.env.DARAJA_CONSUMER_SECRET || "PLACEHOLDER",
-        shortCode: creds.darajaShortCode || process.env.DARAJA_SHORTCODE || "600000",
+        consumerSecret: creds.darajaConsumerSecret || process.env.DARAJA_CONSUMER_SECRET || "",
+        shortCode: creds.darajaShortCode || creds.darajaShortcode || creds.darajaB2cShortcode || creds.shortCode || process.env.DARAJA_SHORTCODE || "600000",
         initiatorName: creds.darajaInitiatorName || "TUZO_INIT",
-        initiatorPassword: creds.darajaInitiatorPassword || "Password123",
-        securityCredential: creds.darajaSecurityCredential || "CREDENTIAL_HASH",
-        callbackUrl: `${process.env.APP_URL}/api/mpesa/b2c/callback?tenantId=${tenantId}`,
-        queueTimeOutUrl: `${process.env.APP_URL}/api/mpesa/b2c/timeout?tenantId=${tenantId}`,
-        baseUrl: creds.darajaBaseUrl || "https://sandbox.safaricom.co.ke",
+        initiatorPassword: creds.darajaInitiatorPassword || creds.darajaPassword || "",
+        securityCredential: creds.darajaSecurityCredential || "",
+        certificatePem: creds.certificatePem || creds.darajaCertificatePem || undefined,
+        callbackUrl: `${getAppBaseUrl()}/api/mpesa/b2c/callback?tenantId=${tenantId}`,
+        queueTimeOutUrl: `${getAppBaseUrl()}/api/mpesa/b2c/timeout?tenantId=${tenantId}`,
+        baseUrl: creds.darajaBaseUrl || (creds.darajaEnv === "production" ? "https://api.safaricom.co.ke" : "https://sandbox.safaricom.co.ke"),
       };
 
       const result = await DarajaService.sendPayout({
