@@ -14,12 +14,7 @@ export function getAppDomain(): string {
     return process.env.NEXT_PUBLIC_APP_URL.replace(/^https?:\/\//, '').replace(/\/$/, '');
   }
 
-  // 3. Vercel deployment URL (automatically populated by Vercel)
-  if (process.env.VERCEL_URL) {
-    return process.env.VERCEL_URL.replace(/^https?:\/\//, '').replace(/\/$/, '');
-  }
-
-  // 4. Fallback to default Vercel domain or localhost for local dev
+  // 3. Always use the canonical production domain for Safaricom callbacks
   return "tuzohub.vercel.app";
 }
 

@@ -92,13 +92,13 @@ export default function RedemptionQueue() {
       if (json.success) {
         setManualStatus({
           type: "success",
-          msg: `Success! KES ${amount} payout dispatched to Safaricom. Ref: ${json.externalReference || "Dispatched"}`
+          msg: `Dispatched to Safaricom B2C queue (Ref: ${json.externalReference || "Dispatched"}). Check transaction status below.`
         });
         setAmount("");
         setSelectedConsumer(null);
         mutate();
       } else {
-        setManualStatus({ type: "error", msg: json.error || "Payout failed" });
+        setManualStatus({ type: "error", msg: json.error || "Payout request was rejected" });
       }
     } catch (err: any) {
       setManualStatus({ type: "error", msg: err.message || "Failed to trigger manual payout" });
