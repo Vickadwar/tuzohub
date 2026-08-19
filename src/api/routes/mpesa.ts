@@ -252,6 +252,7 @@ app.get("/balance", async (c) => {
 
     const responseData = {
       shortCode: shortCode || "Not Configured",
+      initiatorName: creds.darajaInitiatorName || null,
       utility: storedBalance.utility || (isConfigured ? "Pending Query" : "Unconfigured"),
       working: storedBalance.working || (isConfigured ? "Pending Query" : "Unconfigured"),
       charge: storedBalance.charge || (isConfigured ? "Pending Query" : "Unconfigured"),
@@ -302,9 +303,13 @@ app.post("/balance/query", async (c) => {
 
     return c.json({
       success: true,
+      data: {
+        conversationId: result.ConversationID,
+        originatorConversationId: result.OriginatorConversationID,
+        responseCode: result.ResponseCode,
+        responseDescription: result.ResponseDescription,
+      },
       message: "Balance query request submitted to Safaricom successfully",
-      conversationId: result.ConversationID,
-      rawResponse: result,
     });
   } catch (error: any) {
     console.error("[Mpesa Balance Query Error]", error);
@@ -363,6 +368,38 @@ app.post("/test-connection", async (c) => {
 });
 
 /**
+ * Helper to parse Safaricom's pipe-and-ampersand delimited AccountBalance string
+ * e.g. "Working Account|KES|50000.00|50000.00|0.00|0.00&Utility Account|KES|120000.00|120000.00|0.00|0.00"
+ */
+function parseSafaricomAccountBalance(raw: string) {
+  let utility: string | undefined;
+  let working: string | undefined;
+  let charge: string | undefined;
+
+  if (!raw) return { utility, working, charge };
+
+  const accounts = raw.split(/[&;\n]+/);
+  for (const acc of accounts) {
+    const parts = acc.trim().split("|");
+    if (parts.length >= 3) {
+      const name = parts[0].toLowerCase();
+      const currency = parts[1] || "KES";
+      const available = parts[2] || "0.00";
+      const formatted = `${Number(available).toLocaleString("en-KE", { minimumFractionDigits: 2 })} ${currency}`;
+      
+      if (name.includes("utility")) {
+        utility = formatted;
+      } else if (name.includes("working")) {
+        working = formatted;
+      } else if (name.includes("charge")) {
+        charge = formatted;
+      }
+    }
+  }
+  return { utility, working, charge };
+}
+
+/**
  * POST /api/mpesa/balance/callback
  * Safaricom calls this asynchronously with account float balances.
  */
@@ -382,12 +419,12 @@ app.post("/balance/callback", async (c) => {
     const params: Array<{ Key: string; Value: any }> = ResultParameters.ResultParameter;
     const getParam = (key: string) => params.find((p) => p.Key === key)?.Value;
 
-    // Safaricom balance parameters
-    // Format is typically "Working Account|KES|900000.00|900000.00|0.00|0.00"
     const accountBalanceRaw = getParam("AccountBalance") || getParam("Balance") || "";
     const utilityFund = getParam("B2CUtilityAccountAvailableFunds") || getParam("UtilityAccountAvailableFunds");
     const workingFund = getParam("B2CWorkingAccountAvailableFunds") || getParam("WorkingAccountAvailableFunds");
     const chargeFund  = getParam("ChargeAccountAvailableFunds");
+
+    const parsed = parseSafaricomAccountBalance(accountBalanceRaw);
 
     try {
       const tSettingsRecords = await db.select().from(tenantSettings).where(eq(tenantSettings.tenantId, tenantId)).limit(1);
@@ -398,9 +435,9 @@ app.post("/balance/callback", async (c) => {
         const updatedCreds = {
           ...creds,
           floatBalance: {
-            utility: utilityFund ?? creds.floatBalance?.utility ?? "N/A",
-            working: workingFund ?? creds.floatBalance?.working ?? "N/A",
-            charge: chargeFund ?? creds.floatBalance?.charge ?? "N/A",
+            utility: utilityFund ? `${utilityFund} KES` : (parsed.utility || creds.floatBalance?.utility || "0.00 KES"),
+            working: workingFund ? `${workingFund} KES` : (parsed.working || creds.floatBalance?.working || "0.00 KES"),
+            charge: chargeFund ? `${chargeFund} KES` : (parsed.charge || creds.floatBalance?.charge || "0.00 KES"),
             raw: accountBalanceRaw,
             lastCheckedAt: new Date().toISOString(),
           }

@@ -147,7 +147,7 @@ export async function authenticatedFetch(url: string, options: RequestInit = {})
     if (!json.success) {
       throw new Error(json.error || "API returned failure");
     }
-    return json.data;
+    return json.data !== undefined ? json.data : json;
   }
 
   return json;

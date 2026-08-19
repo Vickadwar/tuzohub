@@ -32,16 +32,12 @@ export function MpesaFloatCard({ tenantId, className = "" }: MpesaFloatCardProps
     setStatusMsg(null);
     try {
       const url = tenantId ? `/api/mpesa/balance/query?tenantId=${tenantId}` : "/api/mpesa/balance/query";
-      const json = await authenticatedFetch(url, { method: "POST" });
-      if (json.success) {
-        setStatusMsg("Balance query request sent to Safaricom Daraja API. Refreshing float metrics...");
-        setTimeout(() => {
-          mutate();
-          setStatusMsg(null);
-        }, 2500);
-      } else {
-        setStatusMsg(`Error: ${json.error || "Failed to query balance"}`);
-      }
+      await authenticatedFetch(url, { method: "POST" });
+      setStatusMsg("Balance query request sent to Safaricom Daraja API. Refreshing float metrics...");
+      setTimeout(() => {
+        mutate();
+        setStatusMsg(null);
+      }, 3500);
     } catch (err: any) {
       setStatusMsg(`Error: ${err.message || "Network error querying Safaricom"}`);
     } finally {
@@ -154,8 +150,13 @@ export function MpesaFloatCard({ tenantId, className = "" }: MpesaFloatCardProps
           {statusMsg}
         </div>
       ) : (
-        <div className="flex items-center justify-between mt-4 text-[11px] text-gray-400 border-t border-gray-800 pt-3">
-          <span>Configured Shortcode: <code className="text-brand-400 font-mono font-bold">{shortCode}</code></span>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mt-4 text-[11px] text-gray-400 border-t border-gray-800 pt-3">
+          <div className="flex items-center gap-2">
+            <span>Paybill/Shortcode: <code className="text-brand-400 font-mono font-bold">{shortCode}</code></span>
+            {floatData.initiatorName && floatData.initiatorName !== "Not Configured" && (
+              <span className="hidden sm:inline">• Operator: <code className="text-gray-300 font-mono font-semibold">{floatData.initiatorName}</code></span>
+            )}
+          </div>
           <span>Last Synced: <strong className="text-gray-200">{lastCheckedAt}</strong></span>
         </div>
       )}
