@@ -280,7 +280,8 @@ app.post("/balance/query", async (c) => {
 
   try {
     const tSettingsRecords = await db.select().from(tenantSettings).where(eq(tenantSettings.tenantId, tenantId)).limit(1);
-    const creds = (tSettingsRecords[0]?.credentials || {}) as any;
+    const tSettings = tSettingsRecords[0];
+    const creds = (tSettings?.credentials || {}) as any;
 
     if (!creds?.darajaConsumerKey) {
       return c.json({ success: false, error: "Daraja credentials not configured for this tenant" }, 400);
@@ -300,6 +301,18 @@ app.post("/balance/query", async (c) => {
     };
 
     const result = await DarajaService.getAccountBalance({ config });
+
+    // Store conversationId for accurate callback correlation
+    if (tSettings && result?.ConversationID) {
+      const updatedCreds = {
+        ...creds,
+        lastBalanceConversationId: result.ConversationID,
+        lastBalanceOriginatorConversationId: result.OriginatorConversationID,
+      };
+      await db.update(tenantSettings)
+        .set({ credentials: updatedCreds, updatedAt: new Date() })
+        .where(eq(tenantSettings.id, tSettings.id));
+    }
 
     return c.json({
       success: true,
@@ -405,53 +418,84 @@ function parseSafaricomAccountBalance(raw: string) {
  */
 app.post("/balance/callback", async (c) => {
   const body = await c.req.json();
-  const tenantId = c.req.query("tenantId");
+  const tenantIdParam = c.req.query("tenantId");
 
-  console.log(`[Mpesa Balance Callback] Tenant: ${tenantId}`, JSON.stringify(body));
+  console.log(`[Mpesa Balance Callback] Received payload:`, JSON.stringify(body));
 
-  if (!body.Result || !tenantId) {
-    return c.json({ ResultCode: 1, ResultDesc: "Invalid payload or tenantId missing" });
+  if (!body.Result) {
+    return c.json({ ResultCode: 1, ResultDesc: "Invalid payload" });
   }
 
-  const { ResultCode, ResultDesc, ResultParameters } = body.Result;
+  const { ResultCode, ResultDesc, ResultParameters, ConversationID } = body.Result;
 
-  if (ResultCode === 0 && ResultParameters?.ResultParameter) {
-    const params: Array<{ Key: string; Value: any }> = ResultParameters.ResultParameter;
-    const getParam = (key: string) => params.find((p) => p.Key === key)?.Value;
+  // 1. Resolve tenant record dynamically
+  let tSettings: any = null;
+  if (tenantIdParam) {
+    const records = await db.select().from(tenantSettings).where(eq(tenantSettings.tenantId, tenantIdParam)).limit(1);
+    tSettings = records[0];
+  }
 
-    const accountBalanceRaw = getParam("AccountBalance") || getParam("Balance") || "";
-    const utilityFund = getParam("B2CUtilityAccountAvailableFunds") || getParam("UtilityAccountAvailableFunds");
-    const workingFund = getParam("B2CWorkingAccountAvailableFunds") || getParam("WorkingAccountAvailableFunds");
-    const chargeFund  = getParam("ChargeAccountAvailableFunds");
+  if (!tSettings && ConversationID) {
+    const allSettings = await db.select().from(tenantSettings);
+    tSettings = allSettings.find((s) => {
+      const creds = (s.credentials || {}) as any;
+      return creds.lastBalanceConversationId === ConversationID;
+    });
+  }
 
-    const parsed = parseSafaricomAccountBalance(accountBalanceRaw);
+  if (!tSettings) {
+    const allSettings = await db.select().from(tenantSettings);
+    tSettings = allSettings.find((s) => (s.credentials as any)?.darajaConsumerKey) || allSettings[0];
+  }
 
-    try {
-      const tSettingsRecords = await db.select().from(tenantSettings).where(eq(tenantSettings.tenantId, tenantId)).limit(1);
-      const tSettings = tSettingsRecords[0];
+  if (tSettings) {
+    const creds = (tSettings.credentials || {}) as any;
+    let floatBalanceData: any = {};
 
-      if (tSettings) {
-        const creds = (tSettings.credentials || {}) as any;
-        const updatedCreds = {
-          ...creds,
-          floatBalance: {
-            utility: utilityFund ? `${utilityFund} KES` : (parsed.utility || creds.floatBalance?.utility || "0.00 KES"),
-            working: workingFund ? `${workingFund} KES` : (parsed.working || creds.floatBalance?.working || "0.00 KES"),
-            charge: chargeFund ? `${chargeFund} KES` : (parsed.charge || creds.floatBalance?.charge || "0.00 KES"),
-            raw: accountBalanceRaw,
-            lastCheckedAt: new Date().toISOString(),
-          }
-        };
+    if (ResultCode === 0 && ResultParameters?.ResultParameter) {
+      const params: Array<{ Key: string; Value: any }> = ResultParameters.ResultParameter;
+      const getParam = (key: string) => params.find((p) => p.Key === key)?.Value;
 
-        await db.update(tenantSettings)
-          .set({ credentials: updatedCreds, updatedAt: new Date() })
-          .where(eq(tenantSettings.id, tSettings.id));
-        
-        console.log(`[Mpesa Balance Callback] Updated float balance for tenant ${tenantId}`);
-      }
-    } catch (err) {
-      console.error("[Mpesa Balance Callback DB Error]", err);
+      const accountBalanceRaw = getParam("AccountBalance") || getParam("Balance") || "";
+      const utilityFund = getParam("B2CUtilityAccountAvailableFunds") || getParam("UtilityAccountAvailableFunds");
+      const workingFund = getParam("B2CWorkingAccountAvailableFunds") || getParam("WorkingAccountAvailableFunds");
+      const chargeFund  = getParam("ChargeAccountAvailableFunds");
+
+      const parsed = parseSafaricomAccountBalance(accountBalanceRaw);
+
+      floatBalanceData = {
+        utility: utilityFund ? `${utilityFund} KES` : (parsed.utility || creds.floatBalance?.utility || "0.00 KES"),
+        working: workingFund ? `${workingFund} KES` : (parsed.working || creds.floatBalance?.working || "0.00 KES"),
+        charge: chargeFund ? `${chargeFund} KES` : (parsed.charge || creds.floatBalance?.charge || "0.00 KES"),
+        raw: accountBalanceRaw,
+        status: "ACTIVE",
+        error: null,
+        lastCheckedAt: new Date().toISOString(),
+      };
+    } else {
+      floatBalanceData = {
+        utility: `Failed (${ResultCode})`,
+        working: `Failed (${ResultCode})`,
+        charge: `Failed (${ResultCode})`,
+        error: ResultDesc || `Safaricom error code ${ResultCode}`,
+        status: "FAILED",
+        lastCheckedAt: new Date().toISOString(),
+      };
     }
+
+    const updatedCreds = {
+      ...creds,
+      floatBalance: {
+        ...creds.floatBalance,
+        ...floatBalanceData,
+      }
+    };
+
+    await db.update(tenantSettings)
+      .set({ credentials: updatedCreds, updatedAt: new Date() })
+      .where(eq(tenantSettings.id, tSettings.id));
+    
+    console.log(`[Mpesa Balance Callback] Successfully updated float balance for tenant ${tSettings.tenantId}`);
   }
 
   return c.json({ ResultCode: 0, ResultDesc: "Accepted" });
