@@ -74,10 +74,6 @@ export default function RedemptionQueue() {
       return;
     }
 
-    if (!confirm(`Are you sure you want to send KES ${amount} directly to ${phoneNumber}?`)) {
-      return;
-    }
-
     setIsSendingManual(true);
     setManualStatus(null);
 
