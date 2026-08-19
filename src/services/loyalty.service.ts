@@ -293,8 +293,8 @@ export class LoyaltyService {
         initiatorPassword: creds.darajaInitiatorPassword || creds.darajaPassword || "",
         securityCredential: creds.darajaSecurityCredential || "",
         certificatePem: creds.certificatePem || creds.darajaCertificatePem || undefined,
-        callbackUrl: `${getAppBaseUrl()}/api/mpesa/b2c/callback?tenantId=${tenantId}`,
-        queueTimeOutUrl: `${getAppBaseUrl()}/api/mpesa/b2c/timeout?tenantId=${tenantId}`,
+        callbackUrl: `${getAppBaseUrl()}/api/mpesa/b2c/callback`,
+        queueTimeOutUrl: `${getAppBaseUrl()}/api/mpesa/b2c/timeout`,
         baseUrl: creds.darajaBaseUrl || (creds.darajaEnv === "production" ? "https://api.safaricom.co.ke" : "https://sandbox.safaricom.co.ke"),
       };
 
@@ -303,6 +303,7 @@ export class LoyaltyService {
         amount: parseFloat(queueItem.amountValue),
         phoneNumber: queueItem.consumer.phoneNumber,
         remarks: `Loyalty Payout for ${queueItem.consumer.firstName}`,
+        commandId: creds.darajaB2cCommandId || "BusinessPayment",
       });
 
       // 3. Mark as SUCCESS

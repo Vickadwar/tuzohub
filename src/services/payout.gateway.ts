@@ -121,8 +121,8 @@ export class MpesaPayoutProvider implements PayoutProvider {
         securityCredential: creds.darajaSecurityCredential || "",
         certificatePem: creds.certificatePem || creds.darajaCertificatePem || undefined,
         baseUrl: creds.darajaBaseUrl || (creds.darajaEnv === "production" ? "https://api.safaricom.co.ke" : "https://sandbox.safaricom.co.ke"),
-        callbackUrl: `${getAppBaseUrl()}/api/mpesa/b2c/callback?tenantId=${request.tenantId}`,
-        queueTimeOutUrl: `${getAppBaseUrl()}/api/mpesa/b2c/timeout?tenantId=${request.tenantId}`,
+        callbackUrl: `${getAppBaseUrl()}/api/mpesa/b2c/callback`,
+        queueTimeOutUrl: `${getAppBaseUrl()}/api/mpesa/b2c/timeout`,
       };
 
       // 3. Execute Payout
@@ -131,6 +131,7 @@ export class MpesaPayoutProvider implements PayoutProvider {
         amount: request.amount,
         phoneNumber: request.destination,
         remarks: `Redemption ${request.redemptionId}`,
+        commandId: creds.darajaB2cCommandId || "BusinessPayment",
       });
 
       return {

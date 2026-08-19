@@ -41,7 +41,7 @@ export class DarajaService {
     occasion?: string;
     commandId?: "SalaryPayment" | "BusinessPayment" | "PromotionPayment";
   }) {
-    const { config, amount, phoneNumber, remarks, occasion = "Loyalty Reward", commandId = "PromotionPayment" } = params;
+    const { config, amount, phoneNumber, remarks, occasion = "Loyalty Reward", commandId = "BusinessPayment" } = params;
 
     // Simulation check: If credentials look like placeholders, simulate success
     if (config.consumerKey.includes("PLACEHOLDER") || !config.consumerKey) {
