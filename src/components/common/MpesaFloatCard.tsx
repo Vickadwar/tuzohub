@@ -156,6 +156,19 @@ export function MpesaFloatCard({ tenantId, className = "" }: MpesaFloatCardProps
         </div>
       </div>
 
+      {/* Error Diagnostics Banner */}
+      {floatData.error && (
+        <div className="mt-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs text-rose-300 flex items-start gap-2.5">
+          <span className="text-base shrink-0">⚠️</span>
+          <div>
+            <p className="font-bold text-rose-200">Safaricom Response: {floatData.error}</p>
+            <p className="text-[11px] text-rose-300/80 mt-0.5 leading-relaxed">
+              Ensure operator <strong>{shortCode} / {floatData.initiatorName || "initiator"}</strong> has active "Check Balance" / "Business Admin" permissions on the M-Pesa Org Portal (<code>org.ke.m-pesa.com</code>) and the password is up-to-date.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Footer Meta info */}
       {statusMsg ? (
         <div className="mt-4 p-2.5 rounded-xl bg-brand-500/10 border border-brand-500/20 text-xs font-semibold text-brand-300 text-center animate-fadeIn">
