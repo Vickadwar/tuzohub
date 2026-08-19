@@ -89,10 +89,7 @@ app.post("/b2c/callback", async (c) => {
 
   // ── 1. Find the redemption record by ConversationID ────────────────────────
   const redemption = await db.query.redemptionsQueue.findFirst({
-    where: and(
-      eq(redemptionsQueue.externalReference, ConversationID),
-      eq(redemptionsQueue.tenantId, tenantId as string)
-    ),
+    where: eq(redemptionsQueue.externalReference, ConversationID),
     with: { consumer: true }
   });
 

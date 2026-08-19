@@ -15,7 +15,13 @@ import { useUser } from "@/context/UserContext";
 
 export default function RedemptionQueue() {
   const { user } = useUser();
-  const { data, isLoading, mutate } = useApi<any>("/loyalty/redemptions?status=PENDING");
+  const [statusFilter, setStatusFilter] = useState<string>("ALL");
+
+  const endpoint = statusFilter === "ALL" 
+    ? "/loyalty/redemptions" 
+    : `/loyalty/redemptions?status=${statusFilter}`;
+    
+  const { data, isLoading, mutate } = useApi<any>(endpoint);
   const queue: any[] = data?.data || data || [];
 
   const [processingId, setProcessingId] = useState<string | null>(null);
@@ -90,7 +96,7 @@ export default function RedemptionQueue() {
       if (json.success) {
         setManualStatus({
           type: "success",
-          msg: `Success! KES ${amount} payout dispatched. Ref: ${json.externalReference || "Sent"}`
+          msg: `Success! KES ${amount} payout dispatched to Safaricom. Ref: ${json.externalReference || "Dispatched"}`
         });
         setAmount("");
         setSelectedConsumer(null);
@@ -106,7 +112,6 @@ export default function RedemptionQueue() {
   };
 
   const handleApprove = async (id: string) => {
-    if (!confirm("Approve this payout? This will trigger the M-Pesa disbursement.")) return;
     setProcessingId(id);
     try {
       await authenticatedFetch(`/api/loyalty/redemptions/${id}/approve`, { method: "POST" });
@@ -138,33 +143,70 @@ export default function RedemptionQueue() {
       {/* Page Header & Top Controls */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white">Redemption &amp; Payout Center</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Manage point-to-cash redemptions, query Safaricom float, and send direct M-Pesa payouts.
+          <h1 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">
+            Redemption & Payout Center
+          </h1>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            Automated M-Pesa B2C disbursements, verified KYC name resolution, and audit ledger.
           </p>
         </div>
+
         <div className="flex items-center gap-3">
           <button
-            onClick={() => setIsManualModalOpen(true)}
-            className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold rounded-xl transition shadow-lg shadow-brand-500/20 flex items-center gap-2"
+            onClick={() => {
+              setManualStatus(null);
+              setIsManualModalOpen(true);
+            }}
+            className="px-4 py-2.5 bg-brand-500 hover:bg-brand-600 active:scale-95 text-white text-xs font-bold rounded-xl transition shadow-lg shadow-brand-500/20 flex items-center gap-2"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
             </svg>
             Direct Send (Manual Payout)
           </button>
-
-          <div className="px-3.5 py-1.5 bg-warning-500/10 text-warning-600 dark:text-warning-400 rounded-lg text-xs font-bold border border-warning-500/20">
-            {queue.length} Pending
-          </div>
         </div>
       </div>
 
       {/* Float Balance Dashboard Card */}
       <MpesaFloatCard tenantId={user?.tenantId || undefined} />
 
-      {/* Redemption Queue Table */}
-      <div className="bg-white dark:bg-white/[0.02] border border-gray-200/80 dark:border-white/[0.06] rounded-2xl overflow-hidden shadow-sm">
+      {/* Redemption Queue Table Card */}
+      <div className="bg-white dark:bg-white/[0.02] border border-gray-200/80 dark:border-white/[0.06] rounded-2xl overflow-hidden shadow-sm space-y-4 p-5">
+        {/* Filter Tabs */}
+        <div className="flex items-center justify-between border-b border-gray-100 dark:border-white/5 pb-3">
+          <div className="flex items-center gap-2">
+            {[
+              { id: "ALL", label: "All Transactions" },
+              { id: "PENDING", label: "Pending Approval" },
+              { id: "SUCCESS", label: "Completed Payouts" },
+              { id: "FAILED", label: "Failed" },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setStatusFilter(tab.id)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                  statusFilter === tab.id
+                    ? "bg-brand-500 text-white shadow-sm"
+                    : "text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          <button
+            onClick={() => mutate()}
+            className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 transition"
+            title="Refresh Transactions"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Table Content */}
         <div className="overflow-x-auto">
           {isLoading ? (
             <div className="py-20 flex justify-center">
@@ -174,66 +216,118 @@ export default function RedemptionQueue() {
             <Table>
               <TableHeader>
                 <TableRow className="bg-gray-50/50 dark:bg-white/[0.01]">
-                  <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400">Consumer</TableCell>
-                  <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400">Destination</TableCell>
+                  <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400">Recipient / Consumer</TableCell>
+                  <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400">Destination Account</TableCell>
                   <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400">Value (KES)</TableCell>
-                  <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400">Fulfillment mode</TableCell>
-                  <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400 text-right whitespace-nowrap">Actions</TableCell>
+                  <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400">Safaricom Status & Ref</TableCell>
+                  <TableCell isHeader className="py-3.5 px-6 text-xs font-semibold text-gray-500 dark:text-gray-400 text-right whitespace-nowrap">Actions / Info</TableCell>
                 </TableRow>
               </TableHeader>
               <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.04]">
                 {queue.length > 0 ? (
-                  queue.map((req: any) => (
-                    <TableRow key={req.id} className="hover:bg-gray-50/50 dark:hover:bg-white/[0.02] transition-colors">
-                      <TableCell className="py-4 px-6">
-                        <div className="flex flex-col">
-                          <span className="text-sm font-bold text-gray-900 dark:text-white">
-                            {req.consumer?.firstName} {req.consumer?.lastName}
-                          </span>
-                          <span className="text-xs text-gray-400">{req.consumer?.phoneNumber}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="py-4 px-6 font-mono text-xs text-gray-700 dark:text-gray-300">
-                        {req.destinationAccount}
-                      </TableCell>
-                      <TableCell className="py-4 px-6">
-                        <div className="flex flex-col">
-                          <span className="text-sm font-black text-gray-900 dark:text-white">
-                            {parseFloat(req.amountValue || "0").toLocaleString()} KES
-                          </span>
-                          <span className="text-[10px] text-gray-400">Conversion Rate Applied</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="py-4 px-6">
-                        <Badge size="sm" color="primary">{req.fulfillmentMode}</Badge>
-                      </TableCell>
-                      <TableCell className="py-4 px-6 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => handleApprove(req.id)}
-                            disabled={processingId === req.id}
-                            className="px-4 py-1.5 bg-brand-500 text-white text-xs font-bold rounded-lg hover:bg-brand-600 transition shadow-lg shadow-brand-500/10 disabled:opacity-50"
-                          >
-                            {processingId === req.id ? "Processing..." : "Approve Payout"}
-                          </button>
-                          <button
-                            onClick={() => handleReject(req.id)}
-                            disabled={processingId === req.id}
-                            className="p-1.5 text-gray-400 hover:text-error-500 transition-colors disabled:opacity-50"
-                            title="Reject"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                          </button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  queue.map((req: any) => {
+                    const metadata = (req.metadata || {}) as any;
+                    const mpesaReceipt = metadata.mpesaTransactionId || null;
+                    const isVerified = req.consumer?.isVerified;
+
+                    return (
+                      <TableRow key={req.id} className="hover:bg-gray-50/50 dark:hover:bg-white/[0.02] transition-colors">
+                        <TableCell className="py-4 px-6">
+                          <div className="flex flex-col">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-sm font-bold text-gray-900 dark:text-white">
+                                {req.consumer?.firstName} {req.consumer?.lastName}
+                              </span>
+                              {isVerified && (
+                                <span className="px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-500 text-[10px] font-bold border border-emerald-500/20" title="Verified Safaricom KYC Name">
+                                  ✓ Verified
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-xs text-gray-400 font-mono">{req.consumer?.phoneNumber}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="py-4 px-6 font-mono text-xs text-gray-700 dark:text-gray-300">
+                          {req.destinationAccount}
+                        </TableCell>
+                        <TableCell className="py-4 px-6">
+                          <div className="flex flex-col">
+                            <span className="text-sm font-black text-gray-900 dark:text-white">
+                              KES {parseFloat(req.amountValue || "0").toLocaleString("en-KE", { minimumFractionDigits: 2 })}
+                            </span>
+                            <span className="text-[10px] text-gray-400">{req.fulfillmentMode || "AUTOMATED_PAYOUT"}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="py-4 px-6">
+                          <div className="flex flex-col gap-1">
+                            <div>
+                              {req.status === "SUCCESS" && (
+                                <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-bold border border-emerald-500/20">
+                                  ✓ Completed
+                                </span>
+                              )}
+                              {req.status === "PROCESSING" && (
+                                <span className="px-2.5 py-1 rounded-lg bg-brand-500/10 text-brand-400 text-xs font-bold border border-brand-500/20 animate-pulse">
+                                  ⏳ Processing Safaricom
+                                </span>
+                              )}
+                              {req.status === "PENDING" && (
+                                <span className="px-2.5 py-1 rounded-lg bg-warning-500/10 text-warning-500 text-xs font-bold border border-warning-500/20">
+                                  Pending Approval
+                                </span>
+                              )}
+                              {req.status === "FAILED" && (
+                                <span className="px-2.5 py-1 rounded-lg bg-rose-500/10 text-rose-400 text-xs font-bold border border-rose-500/20" title={req.lastError || "Failed"}>
+                                  ✕ Failed
+                                </span>
+                              )}
+                            </div>
+                            {mpesaReceipt && (
+                              <span className="text-[10px] font-mono text-gray-400">
+                                Receipt: <strong className="text-gray-300">{mpesaReceipt}</strong>
+                              </span>
+                            )}
+                            {req.lastError && (
+                              <span className="text-[10px] text-rose-400 truncate max-w-xs" title={req.lastError}>
+                                {req.lastError}
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="py-4 px-6 text-right">
+                          {req.status === "PENDING" ? (
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={() => handleApprove(req.id)}
+                                disabled={processingId === req.id}
+                                className="px-4 py-1.5 bg-brand-500 text-white text-xs font-bold rounded-lg hover:bg-brand-600 transition shadow-lg shadow-brand-500/10 disabled:opacity-50"
+                              >
+                                {processingId === req.id ? "Processing..." : "Approve"}
+                              </button>
+                              <button
+                                onClick={() => handleReject(req.id)}
+                                disabled={processingId === req.id}
+                                className="p-1.5 text-gray-400 hover:text-error-500 transition-colors disabled:opacity-50"
+                                title="Reject"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-[11px] font-mono text-gray-400">
+                              {new Date(req.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={5} className="py-20 text-center text-gray-400 italic text-sm">
-                      No redemptions currently pending in the queue.
+                    <TableCell colSpan={5} className="py-16 text-center text-gray-400 italic text-xs">
+                      No transactions found for the selected filter.
                     </TableCell>
                   </TableRow>
                 )}
