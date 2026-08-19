@@ -29,15 +29,27 @@ export function MpesaFloatCard({ tenantId, className = "" }: MpesaFloatCardProps
 
   const handleQueryBalance = async () => {
     setIsQuerying(true);
-    setStatusMsg(null);
+    setStatusMsg("Submitting balance query to Safaricom Daraja API...");
     try {
       const url = tenantId ? `/api/mpesa/balance/query?tenantId=${tenantId}` : "/api/mpesa/balance/query";
       await authenticatedFetch(url, { method: "POST" });
-      setStatusMsg("Balance query request sent to Safaricom Daraja API. Refreshing float metrics...");
-      setTimeout(() => {
-        mutate();
-        setStatusMsg(null);
-      }, 3500);
+      setStatusMsg("Query accepted by Safaricom! Waiting for M-Pesa core callback (typically 5–15 seconds)...");
+      
+      // Auto-poll every 3 seconds for up to 15 seconds to catch Safaricom's webhook callback
+      let attempts = 0;
+      const interval = setInterval(async () => {
+        attempts++;
+        const refreshed = await mutate();
+        const data = refreshed?.data || refreshed || {};
+        if (data.utility && !data.utility.includes("Pending")) {
+          clearInterval(interval);
+          setStatusMsg("Float metrics synced successfully from Safaricom!");
+          setTimeout(() => setStatusMsg(null), 4000);
+        } else if (attempts >= 5) {
+          clearInterval(interval);
+          setStatusMsg(null);
+        }
+      }, 3000);
     } catch (err: any) {
       setStatusMsg(`Error: ${err.message || "Network error querying Safaricom"}`);
     } finally {
