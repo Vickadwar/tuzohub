@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { ConsumerService } from "../../services/consumer.service";
-import { withScopedDb } from "../../db";
+import { db, withScopedDb } from "../../db";
+import { tenantSettings, tenants } from "../../db/schema";
 import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
 
@@ -14,6 +15,28 @@ app.get("/", async (c) => {
   try {
     const data = await withScopedDb(user.userId, user.role || "authenticated", async (tx) => {
       return await ConsumerService.listConsumers(user.tenantId, tx);
+    });
+    return c.json({ success: true, data });
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+// GET /api/consumers/search?query=...
+app.get("/search", async (c) => {
+  const user = c.get("user");
+  const query = c.req.query("query") || "";
+
+  let tenantId: string = c.req.query("tenantId") || user?.tenantId;
+  if (!tenantId) {
+    const allSettings = await db.select().from(tenantSettings);
+    const configured = allSettings.find((s: any) => (s.credentials as any)?.darajaConsumerKey);
+    tenantId = configured?.tenantId || (await db.query.tenants.findFirst())?.id as string;
+  }
+
+  try {
+    const data = await withScopedDb(user.userId, user.role || "authenticated", async (tx) => {
+      return await ConsumerService.searchConsumers(tenantId, query, tx);
     });
     return c.json({ success: true, data });
   } catch (error: any) {
@@ -237,28 +260,6 @@ app.post("/status/:id", zValidator("json", setStatusSchema), async (c) => {
   }
 });
 
-// GET /api/consumers/search?query=...
-app.get("/search", async (c) => {
-  const user = c.get("user");
-  const query = c.req.query("query") || "";
-
-  if (!user.tenantId) {
-    return c.json({ success: false, error: "User tenant not found" }, 403);
-  }
-
-  try {
-    const results = await withScopedDb(user.userId, user.role || "authenticated", async (tx) => {
-      return await ConsumerService.searchConsumers(user.tenantId, query, tx);
-    });
-
-    return c.json({
-      success: true,
-      data: results,
-    });
-  } catch (error: any) {
-    return c.json({ success: false, error: error.message }, 500);
-  }
-});
 
 // GET /api/consumers/:id/activity/:identifier
 app.get("/:id/activity/:identifier", async (c) => {

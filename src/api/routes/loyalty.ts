@@ -2,8 +2,8 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
 import { LoyaltyService } from "../../services/loyalty.service";
-import { withScopedDb } from "../../db";
-import { vouchers, voucherBatches, redemptionsQueue } from "../../db/schema";
+import { db, withScopedDb } from "../../db";
+import { vouchers, voucherBatches, redemptionsQueue, tenantSettings, tenants } from "../../db/schema";
 import { eq, sql } from "drizzle-orm";
 
 const app = new Hono<{ Variables: { user: any } }>();
@@ -78,19 +78,26 @@ app.get("/balance", async (c) => {
 });
 
 /**
- * GET /api/loyalty/redemptions?status=PENDING
- * Returns the redemptions queue for a tenant.
+ * GET /api/loyalty/redemptions
+ * Returns the redemptions queue/history for a tenant.
  */
 app.get("/redemptions", async (c) => {
   const user = c.get("user");
   const status = c.req.query("status");
 
-  if (!user.tenantId) {
-    return c.json({ success: false, error: "User tenant not found" }, 403);
+  let tenantId = c.req.query("tenantId") || user?.tenantId;
+  if (!tenantId) {
+    const allSettings = await db.select().from(tenantSettings);
+    const configured = allSettings.find((s: any) => (s.credentials as any)?.darajaConsumerKey);
+    tenantId = configured?.tenantId || (await db.query.tenants.findFirst())?.id;
+  }
+
+  if (!tenantId) {
+    return c.json({ success: false, error: "Active tenant not found" }, 403);
   }
 
   try {
-    const queue = await LoyaltyService.getRedemptionsQueue(user.tenantId, status);
+    const queue = await LoyaltyService.getRedemptionsQueue(tenantId, status);
     return c.json({ success: true, data: queue });
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500);

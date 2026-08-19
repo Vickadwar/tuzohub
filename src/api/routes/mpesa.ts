@@ -1,7 +1,8 @@
 import { Context, Hono } from "hono";
 import { db } from "../../db";
-import { consumers, redemptionsQueue, tenantSettings, users, tenants } from "../../db/schema";
+import { consumers, redemptionsQueue, tenantSettings, users, tenants, transactions, wallets } from "../../db/schema";
 import { eq, and } from "drizzle-orm";
+import { ConsumerService } from "../../services/consumer.service";
 import { SmsService } from "../../services/sms.service";
 import { DarajaService } from "../../services/daraja.service";
 import { PayoutGateway } from "../../services/payout.gateway";
@@ -547,23 +548,69 @@ app.post("/manual-payout", async (c) => {
         ? "254" + phoneNumber.slice(1) 
         : phoneNumber;
 
-    // 1. Create a recorded redemption queue entry for auditability
-    let resolvedConsumerId = consumerId;
-    if (!resolvedConsumerId) {
-      const foundConsumer = await db.query.consumers.findFirst({
+    // 1. Resolve or auto-create consumer & wallet
+    let consumer = null;
+    if (consumerId) {
+      consumer = await db.query.consumers.findFirst({ where: eq(consumers.id, consumerId) });
+    }
+    if (!consumer) {
+      consumer = await db.query.consumers.findFirst({
         where: and(eq(consumers.phoneNumber, formattedPhone), eq(consumers.tenantId, tenantId))
       });
-      if (foundConsumer) {
-        resolvedConsumerId = foundConsumer.id;
-      }
+    }
+    if (!consumer) {
+      consumer = await ConsumerService.createConsumer(tenantId, {
+        phoneNumber: formattedPhone,
+        firstName: "M-Pesa",
+        lastName: "Recipient",
+      });
     }
 
-    const redemptionId = "MANUAL-" + Math.random().toString(36).substring(2, 9).toUpperCase();
+    let wallet = await db.query.wallets.findFirst({
+      where: and(eq(wallets.ownerId, consumer.id), eq(wallets.tenantId, tenantId))
+    });
+    if (!wallet) {
+      const [w] = await db.insert(wallets).values({
+        tenantId,
+        ownerId: consumer.id,
+        ownerType: "CONSUMER",
+        pointsBalance: "0",
+        bankedPointsBalance: "0",
+      }).returning();
+      wallet = w;
+    }
 
-    // 2. Dispatch payout directly via PayoutGateway
+    // 2. Create Transaction and Redemptions Queue record
+    const [txRecord] = await db.insert(transactions).values({
+      tenantId,
+      walletId: wallet.id,
+      accountingEntry: "DEBIT",
+      actionCategory: "REDEMPTION",
+      pointsAmount: "0",
+      balanceAfter: wallet.pointsBalance || "0",
+      description: remarks || "Manual Direct M-Pesa Payout",
+    }).returning();
+
+    const [redemptionRecord] = await db.insert(redemptionsQueue).values({
+      tenantId,
+      consumerId: consumer.id,
+      transactionId: txRecord.id,
+      amountValue: Number(amount).toFixed(2),
+      currencyCode: "KES",
+      destinationAccount: formattedPhone,
+      fulfillmentMode: "AUTOMATED_PAYOUT",
+      status: "PROCESSING",
+      metadata: {
+        channel: "MPESA_B2C",
+        remarks: remarks || "Manual Admin Payout",
+        dispatchedAt: new Date().toISOString(),
+      }
+    }).returning();
+
+    // 3. Dispatch payout directly via PayoutGateway
     const result = await PayoutGateway.execute({
       tenantId,
-      redemptionId,
+      redemptionId: redemptionRecord.id,
       amount: Number(amount),
       currency: "KES",
       destination: formattedPhone,
@@ -571,13 +618,24 @@ app.post("/manual-payout", async (c) => {
     });
 
     if (!result.success) {
+      await db.update(redemptionsQueue)
+        .set({ status: "FAILED", lastError: result.error || "Manual payout dispatch failed", updatedAt: new Date() })
+        .where(eq(redemptionsQueue.id, redemptionRecord.id));
       return c.json({ success: false, error: result.error || "Manual payout failed" }, 400);
+    }
+
+    // 4. Update redemption record with Safaricom ConversationID for webhook callback correlation
+    if (result.externalReference) {
+      await db.update(redemptionsQueue)
+        .set({ externalReference: result.externalReference, updatedAt: new Date() })
+        .where(eq(redemptionsQueue.id, redemptionRecord.id));
     }
 
     return c.json({
       success: true,
       message: `Manual payout of KES ${amount} dispatched to ${formattedPhone} successfully`,
       externalReference: result.externalReference,
+      redemptionId: redemptionRecord.id,
       rawResponse: result.rawResponse,
     });
   } catch (error: any) {
