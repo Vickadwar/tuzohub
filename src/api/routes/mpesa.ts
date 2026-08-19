@@ -122,9 +122,12 @@ app.post("/b2c/callback", async (c) => {
       .where(eq(redemptionsQueue.id, redemption.id));
 
     // Notify customer of failure
-    await sendSmsToConsumer(tenantId as string, redemption.consumer.phoneNumber, 
-      `Sorry, your Gamma loyalty payout could not be processed. Reason: ${ResultDesc}. Please contact support.`
-    ).catch(e => console.error("Failure SMS error:", e));
+    const effectiveTenantId = (tenantId || redemption.tenantId) as string;
+    if (redemption.consumer?.phoneNumber) {
+      await sendSmsToConsumer(effectiveTenantId, redemption.consumer.phoneNumber, 
+        `Sorry, your loyalty payout could not be processed. Reason: ${ResultDesc}. Please contact support.`
+      ).catch(e => console.error("Failure SMS error:", e));
+    }
 
     return c.json({ ResultCode: 0, ResultDesc: "Accepted" });
   }
@@ -191,16 +194,17 @@ app.post("/b2c/callback", async (c) => {
   });
 
   // ── 6. Send final confirmation SMS ────────────────────────────────────────
+  const effectiveTenantId = (tenantId || redemption.tenantId) as string;
   const displayName   = verifiedFullName || `${consumer.firstName} ${consumer.lastName}`.trim();
   const displayAmount = transactionAmount ?? redemption.amountValue;
   const successMsg    = [
     `Dear ${displayName},`,
-    `Your Gamma loyalty reward of Ksh ${displayAmount} has been sent to ${redemption.destinationAccount}.`,
+    `Your loyalty reward of Ksh ${displayAmount} has been sent to ${redemption.destinationAccount}.`,
     `M-Pesa Receipt: ${mpesaTransactionId}.`,
-    `Thank you for choosing Gamma Coatings!`,
+    `Thank you!`,
   ].join(" ");
 
-  await sendSmsToConsumer(tenantId as string, redemption.destinationAccount, successMsg)
+  await sendSmsToConsumer(effectiveTenantId, redemption.destinationAccount, successMsg)
     .catch(e => console.error("Success SMS error:", e));
 
   return c.json({ ResultCode: 0, ResultDesc: "Success" });
