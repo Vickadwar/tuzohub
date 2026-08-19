@@ -309,8 +309,8 @@ app.post("/balance/query", async (c) => {
       securityCredential: creds.darajaSecurityCredential || "",
       certificatePem: creds.certificatePem || creds.darajaCertificatePem || undefined,
       baseUrl: creds.darajaBaseUrl || (creds.darajaEnv === "production" ? "https://api.safaricom.co.ke" : "https://sandbox.safaricom.co.ke"),
-      callbackUrl: `${getAppBaseUrl()}/api/mpesa/balance/callback?tenantId=${tenantId}`,
-      queueTimeOutUrl: `${getAppBaseUrl()}/api/mpesa/balance/timeout?tenantId=${tenantId}`,
+      callbackUrl: `${getAppBaseUrl()}/api/mpesa/balance/callback`,
+      queueTimeOutUrl: `${getAppBaseUrl()}/api/mpesa/balance/timeout`,
     };
 
     const result = await DarajaService.getAccountBalance({ config });
