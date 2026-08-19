@@ -30,7 +30,18 @@ async function resolveTenantId(c: Context) {
     }
   }
 
-  // Fallback to first available tenant in DB
+  // Fallback: Find tenant that has configured Daraja settings in tenantSettings
+  const allSettings = await db.select().from(tenantSettings);
+  const configuredTenant = allSettings.find((s) => {
+    const creds = (s.credentials || {}) as any;
+    return Boolean(creds.darajaConsumerKey && (creds.darajaShortCode || creds.darajaShortcode));
+  });
+
+  if (configuredTenant?.tenantId) {
+    return configuredTenant.tenantId;
+  }
+
+  // Final fallback to first available tenant in DB
   const firstTenant = await db.query.tenants.findFirst();
   return firstTenant?.id || null;
 }

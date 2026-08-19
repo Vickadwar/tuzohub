@@ -11,8 +11,10 @@ import {
 import Badge from "@/components/ui/badge/Badge";
 import { useApi, authenticatedFetch } from "@/hooks/useApi";
 import { MpesaFloatCard } from "@/components/common/MpesaFloatCard";
+import { useUser } from "@/context/UserContext";
 
 export default function RedemptionQueue() {
+  const { user } = useUser();
   const { data, isLoading, mutate } = useApi<any>("/loyalty/redemptions?status=PENDING");
   const queue: any[] = data?.data || data || [];
 
@@ -159,7 +161,7 @@ export default function RedemptionQueue() {
       </div>
 
       {/* Float Balance Dashboard Card */}
-      <MpesaFloatCard />
+      <MpesaFloatCard tenantId={user?.tenantId || undefined} />
 
       {/* Redemption Queue Table */}
       <div className="bg-white dark:bg-white/[0.02] border border-gray-200/80 dark:border-white/[0.06] rounded-2xl overflow-hidden shadow-sm">
