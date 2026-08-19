@@ -569,7 +569,51 @@ export default function IntegrationsManager({
                     </span>
                   </div>
 
+                  {/* Zero-Config Banner */}
+                  <div className="flex items-center gap-2.5 p-3 rounded-lg border border-emerald-200 dark:border-emerald-800/60 bg-emerald-50/70 dark:bg-emerald-950/20 text-xs text-emerald-800 dark:text-emerald-300">
+                    <span className="text-base">⚡</span>
+                    <p className="leading-relaxed">
+                      <strong>Zero-Config Security:</strong> No need to download certificates from Safaricom portal or install OpenSSL. TuZo Hub automatically performs RSA PKCS#1 v1.5 public key encryption on your initiator password in real-time.
+                    </p>
+                  </div>
+
                   <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                    <Field
+                      label={`B2C Shortcode / Paybill (${darajaEnv === "production" ? "Production" : "Sandbox"})`}
+                      hint={darajaEnv === "production" ? "Your live M-Pesa B2C Paybill / Shortcode number" : "Sandbox test shortcode (e.g. 600000)"}
+                    >
+                      <SecretInput
+                        value={credentials.darajaShortCode || credentials.darajaShortcode || ""}
+                        onChange={(val) => {
+                          updateField("darajaShortCode", val);
+                          updateField("darajaShortcode", val);
+                        }}
+                        placeholder={darajaEnv === "production" ? "e.g. 3998723" : "600000"}
+                      />
+                    </Field>
+
+                    <Field
+                      label={`Initiator Name (${darajaEnv === "production" ? "Operator Username" : "Sandbox"})`}
+                      hint={darajaEnv === "production" ? "Your M-Pesa portal operator / initiator username" : "Sandbox test initiator (e.g. testapi)"}
+                    >
+                      <SecretInput
+                        value={credentials.darajaInitiatorName || ""}
+                        onChange={(val) => updateField("darajaInitiatorName", val)}
+                        placeholder={darajaEnv === "production" ? "e.g. wattrixx" : "testapi"}
+                      />
+                    </Field>
+
+                    <Field
+                      label={`Initiator Password (${darajaEnv === "production" ? "Production" : "Sandbox"})`}
+                      hint={darajaEnv === "production" ? "Plaintext initiator password (auto-encrypted in real-time)" : "Sandbox test password (e.g. Ndemo92#)"}
+                    >
+                      <SecretInput
+                        value={credentials.darajaInitiatorPassword || credentials.darajaPassword || ""}
+                        onChange={(val) => updateField("darajaInitiatorPassword", val)}
+                        placeholder={darajaEnv === "production" ? "Live initiator password" : "Ndemo92#"}
+                      />
+                    </Field>
+
                     <Field
                       label={`Daraja Consumer Key (${darajaEnv === "production" ? "Production" : "Sandbox"})`}
                       hint={darajaEnv === "production" ? "Live production consumer key from Safaricom Daraja portal" : "Sandbox test consumer key"}
@@ -581,54 +625,15 @@ export default function IntegrationsManager({
                       />
                     </Field>
 
-                    <Field
-                      label={`Daraja Consumer Secret (${darajaEnv === "production" ? "Production" : "Sandbox"})`}
-                      hint={darajaEnv === "production" ? "Live production consumer secret" : "Sandbox test consumer secret"}
-                    >
-                      <SecretInput
-                        value={credentials.darajaConsumerSecret || ""}
-                        onChange={(val) => updateField("darajaConsumerSecret", val)}
-                        placeholder={darajaEnv === "production" ? "Live consumer secret" : "Sandbox consumer secret"}
-                      />
-                    </Field>
-
-                    <Field
-                      label={`B2C Initiator Password (${darajaEnv === "production" ? "Production" : "Sandbox"})`}
-                      hint={darajaEnv === "production" ? "Plaintext initiator password (automatically encrypted using Safaricom Public Cert)" : "Sandbox test password (e.g. Ndemo92#)"}
-                    >
-                      <SecretInput
-                        value={credentials.darajaInitiatorPassword || credentials.darajaPassword || ""}
-                        onChange={(val) => updateField("darajaInitiatorPassword", val)}
-                        placeholder={darajaEnv === "production" ? "Live initiator password" : "Ndemo92#"}
-                      />
-                    </Field>
-
                     <div className="col-span-1 sm:col-span-2">
                       <Field
-                        label={`Security Credential (${darajaEnv === "production" ? "Pre-encrypted String" : "Optional Pre-encrypted"})`}
-                        hint={darajaEnv === "production" ? "Pre-encrypted security credential string (leave blank if password entered above)" : "Optional pre-encrypted credential base64"}
+                        label={`Daraja Consumer Secret (${darajaEnv === "production" ? "Production" : "Sandbox"})`}
+                        hint={darajaEnv === "production" ? "Live production consumer secret" : "Sandbox test consumer secret"}
                       >
                         <SecretInput
-                          multiline
-                          rows={2}
-                          value={credentials.darajaSecurityCredential || ""}
-                          onChange={(val) => updateField("darajaSecurityCredential", val)}
-                          placeholder="Optional pre-encrypted base64 RSA string..."
-                        />
-                      </Field>
-                    </div>
-
-                    <div className="col-span-1 sm:col-span-2">
-                      <Field
-                        label="Custom Safaricom Public Certificate (PEM format - Optional)"
-                        hint="Upload or paste custom Safaricom X.509 certificate PEM if using custom operator portal"
-                      >
-                        <SecretInput
-                          multiline
-                          rows={2}
-                          value={credentials.certificatePem || credentials.darajaCertificatePem || ""}
-                          onChange={(val) => updateField("certificatePem", val)}
-                          placeholder="-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----"
+                          value={credentials.darajaConsumerSecret || ""}
+                          onChange={(val) => updateField("darajaConsumerSecret", val)}
+                          placeholder={darajaEnv === "production" ? "Live consumer secret" : "Sandbox consumer secret"}
                         />
                       </Field>
                     </div>

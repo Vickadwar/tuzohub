@@ -35,6 +35,106 @@ interface HotelReceipt {
 
 const HOTEL_RECEIPTS: HotelReceipt[] = [
   {
+    id: "muranga-highland",
+    name: "HIGHLAND VIEW HOTEL",
+    location: "Murang'a-Nairobi Road, Murang'a Town",
+    town: "Murang'a",
+    kraPin: "P051772340B",
+    cuNumber: "KRA0820260714221",
+    cuSerialNumber: "CU-KRA-MRG-55412",
+    invoiceNo: "ETIMS-HVH-2026-0612",
+    date: "14/07/2026",
+    time: "13:45:22",
+    amount: 9000,
+    customerPin: "P000593540R",
+    customerPinLabel: "BUYER KRA PIN",
+    cashierName: "Wanjiru M. (POS #02)",
+    customerName: "VALUED GUEST",
+    accommodationDesc: "Standard Room Accommodation & Breakfast Package",
+    paymentMethod: "M-PESA PAYBILL",
+    mpesaRef: "RGK77821A3"
+  },
+  {
+    id: "narok-mara",
+    name: "MARA CROSSROADS HOTEL",
+    location: "Narok-Bomet Highway, Narok Town",
+    town: "Narok",
+    kraPin: "P051308812F",
+    cuNumber: "KRA0820260716088",
+    cuSerialNumber: "CU-KRA-NRK-20913",
+    invoiceNo: "ETIMS-MCH-2026-0388",
+    date: "16/07/2026",
+    time: "10:30:05",
+    amount: 9000,
+    customerPin: "P000593540R",
+    customerPinLabel: "CLIENT PIN NO.",
+    cashierName: "Koske L. (Reception)",
+    customerName: "VALUED GUEST",
+    accommodationDesc: "Savannah Gate Lodge Accommodation Stay",
+    paymentMethod: "M-PESA EXPRESS",
+    mpesaRef: "RGJ55032N7"
+  },
+  {
+    id: "kitui-savannah",
+    name: "SAVANNAH PARK HOTEL",
+    location: "Kitui-Mwingi Road, Kitui Town",
+    town: "Kitui",
+    kraPin: "P051584401K",
+    cuNumber: "KRA0820260721774",
+    cuSerialNumber: "CU-KRA-KTI-88320",
+    invoiceNo: "ETIMS-SPH-2026-0501",
+    date: "21/07/2026",
+    time: "15:20:40",
+    amount: 9000,
+    customerPin: "P000593540R",
+    customerPinLabel: "CUST TAX PIN",
+    cashierName: "Mutua J. (Desk Officer)",
+    customerName: "VALUED GUEST",
+    accommodationDesc: "Self-Contained Room & Full Board Accommodation",
+    paymentMethod: "M-PESA PAYBILL",
+    mpesaRef: "RGK11220K6"
+  },
+  {
+    id: "meru-timau",
+    name: "TIMAU HEIGHTS HOTEL",
+    location: "Meru-Nanyuki Highway, Timau, Meru",
+    town: "Meru",
+    kraPin: "P051629917P",
+    cuNumber: "KRA0820260728401",
+    cuSerialNumber: "CU-KRA-MRU-77652",
+    invoiceNo: "ETIMS-THH-2026-0744",
+    date: "28/07/2026",
+    time: "08:55:18",
+    amount: 12000,
+    customerPin: "P000593540R",
+    customerPinLabel: "PIN OF BUYER",
+    cashierName: "Kagwiria P. (Front Office)",
+    customerName: "VALUED GUEST",
+    accommodationDesc: "Mount Kenya View Executive Room Accommodation",
+    paymentMethod: "VISA CARD / M-PESA",
+    mpesaRef: "TXN-THH-44109"
+  },
+  {
+    id: "embu-oleander",
+    name: "OLEANDER HOTEL EMBU",
+    location: "Embu-Nairobi Road, Embu Town",
+    town: "Embu",
+    kraPin: "P051437229W",
+    cuNumber: "KRA0820260804660",
+    cuSerialNumber: "CU-KRA-EMB-33044",
+    invoiceNo: "ETIMS-OHE-2026-0855",
+    date: "04/08/2026",
+    time: "12:10:33",
+    amount: 12000,
+    customerPin: "P000593540R",
+    customerPinLabel: "CUSTOMER KRA PIN",
+    cashierName: "Njiru C. (Cashier #01)",
+    customerName: "VALUED GUEST",
+    accommodationDesc: "Deluxe Room Accommodation & Continental Breakfast",
+    paymentMethod: "M-PESA EXPRESS",
+    mpesaRef: "RGL99341E2"
+  },
+  {
     id: "wida-highway",
     name: "WIDA HIGHWAY MOTEL",
     location: "Nairobi-Nakuru Highway, Kikuyu",
@@ -152,9 +252,12 @@ function calculateTaxBreakdown(totalAmount: number) {
   };
 }
 
+const CROWN_PAINTS_KYC_URL = "https://findapainter.crownpaints.co.ke/painterkyc.aspx";
+
 export default function ETRReceiptsPage() {
   const [selectedHotelId, setSelectedHotelId] = useState<string>("all");
   const [isExporting, setIsExporting] = useState<boolean>(false);
+  const [isQRExporting, setIsQRExporting] = useState<boolean>(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // Compute metrics across all receipts
@@ -173,39 +276,116 @@ export default function ETRReceiptsPage() {
     ? HOTEL_RECEIPTS 
     : HOTEL_RECEIPTS.filter(r => r.id === selectedHotelId);
 
-  // Clean html2canvas capturing without lab() color parsing error
-  const captureCanvas = async (receiptId: string) => {
-    const element = document.getElementById(`receipt-${receiptId}`);
-    if (!element) throw new Error("Receipt element not found");
+  // Native Canvas & SVG foreignObject renderer (Zero external CSS parser dependencies, 100% immune to lab()/oklch() errors)
+  const captureElementToCanvas = async (elementId: string, scale: number = 2): Promise<HTMLCanvasElement> => {
+    const element = document.getElementById(elementId);
+    if (!element) throw new Error(`Element #${elementId} not found`);
 
-    const html2canvas = (await import("html2canvas")).default;
+    // Dedicated native Canvas drawing for Crown Paints KYC QR code
+    if (elementId === "crown-paints-qr-card") {
+      const qrSvg = element.querySelector("svg");
+      if (!qrSvg) throw new Error("QR SVG not found");
 
-    return await html2canvas(element, {
-      scale: 2,
-      useCORS: true,
-      allowTaint: true,
-      backgroundColor: "#ffffff",
-      logging: false,
-      onclone: (clonedDoc) => {
-        // Reset document body to prevent Tailwind v4 lab()/oklch() color errors
-        clonedDoc.body.className = "";
-        clonedDoc.body.style.cssText = "background-color: #ffffff !important; color: #000000 !important; margin: 0; padding: 0;";
-        
-        const clonedEl = clonedDoc.getElementById(`receipt-${receiptId}`);
-        if (clonedEl) {
-          clonedEl.style.boxShadow = "none";
-          clonedEl.style.backgroundColor = "#ffffff";
-          clonedEl.style.color = "#000000";
-        }
-      }
+      const svgXml = new XMLSerializer().serializeToString(qrSvg);
+      const svgBlob = new Blob([svgXml], { type: "image/svg+xml;charset=utf-8" });
+      const blobUrl = URL.createObjectURL(svgBlob);
+
+      const img = new Image();
+      await new Promise<void>((res, rej) => {
+        img.onload = () => res();
+        img.onerror = (err) => rej(err);
+        img.src = blobUrl;
+      });
+
+      const canvas = document.createElement("canvas");
+      const width = 500;
+      const height = 620;
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("Canvas 2D context not available");
+
+      // Clean white background
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, width, height);
+
+      // Header label
+      ctx.fillStyle = "#000000";
+      ctx.font = "bold 20px monospace, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("CROWN PAINTS KENYA", width / 2, 60);
+
+      // QR Code drawing with outer border
+      const qrSize = 360;
+      const qrX = (width - qrSize) / 2;
+      const qrY = 95;
+
+      ctx.strokeStyle = "#000000";
+      ctx.lineWidth = 4;
+      ctx.strokeRect(qrX - 10, qrY - 10, qrSize + 20, qrSize + 20);
+      ctx.drawImage(img, qrX, qrY, qrSize, qrSize);
+
+      // Bottom label
+      ctx.fillStyle = "#000000";
+      ctx.font = "bold 15px sans-serif";
+      ctx.fillText("PAINTER KYC REGISTRATION", width / 2, 520);
+
+      URL.revokeObjectURL(blobUrl);
+      return canvas;
+    }
+
+    // High-fidelity SVG foreignObject renderer for Hotel ETR Receipts
+    const rect = element.getBoundingClientRect();
+    const width = Math.ceil(rect.width) || 340;
+    const height = Math.ceil(rect.height) || 600;
+
+    const clone = element.cloneNode(true) as HTMLElement;
+    clone.style.boxShadow = "none";
+    clone.style.margin = "0";
+
+    const svgInside = clone.querySelectorAll("svg");
+    svgInside.forEach(s => s.setAttribute("xmlns", "http://www.w3.org/2000/svg"));
+
+    const svgString = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="${width * scale}" height="${height * scale}">
+        <rect width="100%" height="100%" fill="#ffffff" />
+        <foreignObject width="100%" height="100%">
+          <div xmlns="http://www.w3.org/1999/xhtml" style="transform: scale(${scale}); transform-origin: 0 0; width: ${width}px; background: #ffffff; color: #000000;">
+            ${clone.outerHTML}
+          </div>
+        </foreignObject>
+      </svg>
+    `;
+
+    const svgBlob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
+    const blobUrl = URL.createObjectURL(svgBlob);
+
+    const img = new Image();
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = (e) => reject(e);
+      img.src = blobUrl;
     });
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width * scale;
+    canvas.height = height * scale;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas 2D context not available");
+
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0);
+
+    URL.revokeObjectURL(blobUrl);
+    return canvas;
   };
 
-  // Download PDF functionality
+  // Download PDF functionality for receipts
   const handleDownloadPDF = async (receiptId: string, hotelName: string) => {
     try {
       setIsExporting(true);
-      const canvas = await captureCanvas(receiptId);
+      const canvas = await captureElementToCanvas(`receipt-${receiptId}`, 2);
       const { jsPDF } = await import("jspdf");
 
       const imgData = canvas.toDataURL("image/png");
@@ -228,11 +408,11 @@ export default function ETRReceiptsPage() {
     }
   };
 
-  // Download PNG image functionality
+  // Download PNG image functionality for receipts
   const handleDownloadPNG = async (receiptId: string, hotelName: string) => {
     try {
       setIsExporting(true);
-      const canvas = await captureCanvas(receiptId);
+      const canvas = await captureElementToCanvas(`receipt-${receiptId}`, 2);
 
       const imgData = canvas.toDataURL("image/png");
       const link = document.createElement("a");
@@ -251,6 +431,46 @@ export default function ETRReceiptsPage() {
 
   const handlePrint = () => {
     window.print();
+  };
+
+  // Download Crown Paints KYC QR as PNG
+  const handleQRDownloadPNG = async () => {
+    try {
+      setIsQRExporting(true);
+      const canvas = await captureElementToCanvas("crown-paints-qr-card", 3);
+      const link = document.createElement("a");
+      link.download = "CrownPaints_KYC_QRCode.png";
+      link.href = canvas.toDataURL("image/png");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error("QR PNG export failed:", err);
+      alert("PNG export failed. Please try again.");
+    } finally {
+      setIsQRExporting(false);
+    }
+  };
+
+  // Download Crown Paints KYC QR as PDF
+  const handleQRDownloadPDF = async () => {
+    try {
+      setIsQRExporting(true);
+      const canvas = await captureElementToCanvas("crown-paints-qr-card", 3);
+      const { jsPDF } = await import("jspdf");
+      const imgData = canvas.toDataURL("image/png");
+      // A5 portrait
+      const pdfW = 148;
+      const pdfH = (canvas.height * pdfW) / canvas.width;
+      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: [pdfW, pdfH] });
+      pdf.addImage(imgData, "PNG", 0, 0, pdfW, pdfH);
+      pdf.save("CrownPaints_KYC_QRCode.pdf");
+    } catch (err) {
+      console.error("QR PDF export failed:", err);
+      alert("PDF export failed. Please try again.");
+    } finally {
+      setIsQRExporting(false);
+    }
   };
 
   const copyEtimsUrl = (receipt: HotelReceipt) => {
@@ -315,6 +535,84 @@ export default function ETRReceiptsPage() {
           </div>
         </div>
 
+        {/* CROWN PAINTS KYC QR CODE CARD */}
+        <div className="mt-6 mb-2">
+          <div className="flex flex-col sm:flex-row gap-6 items-stretch bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden shadow-xl">
+            {/* QR Panel — this div is the export target: NO URL text inside */}
+            <div
+              id="crown-paints-qr-card"
+              className="flex flex-col items-center justify-center bg-white p-6 min-w-[210px]"
+              style={{ backgroundColor: "#ffffff" }}
+            >
+              <p className="text-[9px] font-black tracking-[0.18em] uppercase text-black mb-3" style={{ color: "#000000" }}>
+                CROWN PAINTS KENYA
+              </p>
+              <div className="p-2 border-2 border-black" style={{ borderColor: "#000000", backgroundColor: "#ffffff" }}>
+                <QRCodeSVG
+                  value={CROWN_PAINTS_KYC_URL}
+                  size={160}
+                  level="H"
+                  style={{ display: "block" }}
+                />
+              </div>
+              <p className="text-[8px] font-bold uppercase mt-3 text-black text-center" style={{ color: "#000000" }}>
+                PAINTER KYC REGISTRATION
+              </p>
+            </div>
+
+            {/* Info + Actions */}
+            <div className="flex-1 p-6 flex flex-col justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-red-900/40 text-red-300 border border-red-800">
+                    Crown Paints Kenya
+                  </span>
+                  <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+                    Painter KYC
+                  </span>
+                </div>
+                <h2 className="text-lg font-extrabold text-white leading-snug">
+                  Find a Painter — KYC Registration
+                </h2>
+                <p className="text-slate-400 text-xs mt-1 leading-relaxed">
+                  Scan or share this QR code for Crown Paints painter KYC registration. Directs to the official Crown Paints Kenya painter verification portal.
+                </p>
+                <a
+                  href={CROWN_PAINTS_KYC_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 mt-2 font-mono break-all transition"
+                >
+                  <ExternalLink className="w-3 h-3 shrink-0" />
+                  {CROWN_PAINTS_KYC_URL}
+                </a>
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  onClick={handleQRDownloadPNG}
+                  disabled={isQRExporting}
+                  className="flex items-center gap-2 px-4 py-2 bg-white text-black rounded-xl text-xs font-bold hover:bg-slate-100 transition shadow cursor-pointer border border-slate-200 disabled:opacity-60"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Download QR — PNG
+                </button>
+                <button
+                  onClick={handleQRDownloadPDF}
+                  disabled={isQRExporting}
+                  className="flex items-center gap-2 px-4 py-2 bg-red-700 hover:bg-red-600 text-white rounded-xl text-xs font-bold transition shadow cursor-pointer disabled:opacity-60"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Download QR — PDF
+                </button>
+                {isQRExporting && (
+                  <span className="text-xs text-slate-400 animate-pulse">Generating...</span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* METRICS STATS BAR */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4">
@@ -323,7 +621,7 @@ export default function ETRReceiptsPage() {
               KES {metrics.totalGross.toLocaleString("en-KE", { minimumFractionDigits: 2 })}
             </p>
             <span className="text-xs text-slate-400 flex items-center gap-1 mt-1">
-              <CheckCircle2 className="w-3.5 h-3.5 text-slate-400" /> 5 Hotel Receipts
+              <CheckCircle2 className="w-3.5 h-3.5 text-slate-400" /> 10 Hotel Receipts
             </span>
           </div>
 
@@ -362,7 +660,7 @@ export default function ETRReceiptsPage() {
                 : "bg-slate-800 text-slate-300 hover:bg-slate-700"
             }`}
           >
-            All 5 Hotels
+            All 10 Hotels
           </button>
           {HOTEL_RECEIPTS.map(h => (
             <button
@@ -868,6 +1166,375 @@ export default function ETRReceiptsPage() {
                     {/* Bottom Solid Bar */}
                     <div className="bg-black text-white text-[8px] font-bold text-center py-1 uppercase tracking-widest -mx-5 -mb-5 mt-3" style={{ backgroundColor: "#000000", color: "#ffffff" }}>
                       *** THANK YOU FOR STAYING WITH US ***
+                    </div>
+                  </div>
+                )}
+
+                {/* ========================================================================= */}
+                {/* 6. DESIGN #6: HIGHLAND VIEW HOTEL - Muranga — Stacked Stamp Receipt       */}
+                {/* ========================================================================= */}
+                {receipt.id === "muranga-highland" && (
+                  <div
+                    id={`receipt-${receipt.id}`}
+                    className="w-[340px] max-w-full bg-white text-black p-5 shadow-2xl rounded-none relative font-mono text-xs select-text print:w-[80mm] print:shadow-none print:p-2"
+                    style={{ backgroundColor: "#ffffff", color: "#000000", border: "3px solid #000000", outline: "2px solid #000000", outlineOffset: "3px" }}
+                  >
+                    {/* Stamp-style Header */}
+                    <div className="text-center pb-3" style={{ borderBottom: "2px dashed #000000" }}>
+                      <div className="inline-block border-4 border-black px-3 py-1 mb-1" style={{ borderColor: "#000000" }}>
+                        <p className="text-[9px] font-black tracking-[0.2em] uppercase" style={{ color: "#000000" }}>MURANG'A COUNTY HOTEL</p>
+                      </div>
+                      <h2 className="text-base font-black uppercase tracking-tight leading-tight mt-1" style={{ color: "#000000" }}>{receipt.name}</h2>
+                      <p className="text-[10px] font-semibold mt-0.5" style={{ color: "#000000" }}>{receipt.location}</p>
+                      <p className="text-[8px] italic mt-0.5" style={{ color: "#555555" }}>Est. Highland Accommodation Services</p>
+                    </div>
+
+                    {/* Tax & Receipt Meta */}
+                    <div className="py-2 text-[10px] space-y-0.5" style={{ borderBottom: "1px solid #000000" }}>
+                      <div className="flex justify-between"><span>HOTEL KRA PIN:</span><span className="font-bold font-mono">{receipt.kraPin}</span></div>
+                      <div className="flex justify-between"><span>{receipt.customerPinLabel}:</span><span className="font-bold font-mono">{receipt.customerPin}</span></div>
+                      <div className="flex justify-between"><span>CASHIER:</span><span className="font-semibold">{receipt.cashierName}</span></div>
+                      <div className="flex justify-between" style={{ borderTop: "1px dashed #000000", paddingTop: "4px", marginTop: "4px" }}>
+                        <span>DATE: <strong>{receipt.date}</strong></span>
+                        <span>TIME: <strong>{receipt.time}</strong></span>
+                      </div>
+                      <div className="flex justify-between"><span>INVOICE NO: <strong>{receipt.invoiceNo}</strong></span></div>
+                      <div className="text-[9px]" style={{ color: "#444444" }}>CU: {receipt.cuNumber}</div>
+                    </div>
+
+                    {/* Service */}
+                    <div className="py-3" style={{ borderBottom: "2px solid #000000" }}>
+                      <p className="text-[9px] font-bold uppercase tracking-wider mb-1">ACCOMMODATION SERVICE</p>
+                      <p className="font-bold text-xs leading-snug">{receipt.accommodationDesc}</p>
+                      <div className="flex justify-between items-baseline mt-2 pt-1" style={{ borderTop: "1px dotted #000000" }}>
+                        <span className="font-bold">CHARGE:</span>
+                        <span className="font-extrabold text-sm">KES {receipt.amount.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</span>
+                      </div>
+                    </div>
+
+                    {/* Tax */}
+                    <div className="py-2.5 text-[10px] space-y-1" style={{ borderBottom: "2px solid #000000" }}>
+                      <div className="flex justify-between"><span>Net Amount (Excl. Tax):</span><span>KES {tax.netAmount.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</span></div>
+                      <div className="flex justify-between"><span>Catering Levy (2%):</span><span>KES {tax.cateringLevy.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</span></div>
+                      <div className="flex justify-between"><span>VAT (16% Rate A):</span><span>KES {tax.vatAmount.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</span></div>
+                      <div className="flex justify-between font-black text-xs pt-1" style={{ borderTop: "1px solid #000000" }}>
+                        <span>TOTAL INCLUSIVE:</span><span>KES {tax.totalAmount.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</span>
+                      </div>
+                    </div>
+
+                    {/* Payment */}
+                    <div className="py-1.5 text-[9px] flex justify-between" style={{ borderBottom: "1px dashed #000000" }}>
+                      <span>PAYMENT: {receipt.paymentMethod}</span><span>REF: {receipt.mpesaRef}</span>
+                    </div>
+
+                    {/* QR */}
+                    <div className="pt-3 text-center flex flex-col items-center">
+                      <div className="p-1 bg-white" style={{ border: "2px solid #000000" }}>
+                        <QRCodeSVG value={etimsVerificationUrl} size={100} level="M" />
+                      </div>
+                      <p className="text-[8px] font-black uppercase mt-1">KRA eTIMS VERIFIED ETR</p>
+                      <p className="text-[7px] font-mono" style={{ color: "#444444" }}>{receipt.cuSerialNumber}</p>
+                      <p className="text-[8px] font-bold mt-1">TEMBEA KENYA — ASANTE</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* ========================================================================= */}
+                {/* 7. DESIGN #7: MARA CROSSROADS HOTEL - Narok — Wildlife Savannah Receipt   */}
+                {/* ========================================================================= */}
+                {receipt.id === "narok-mara" && (
+                  <div
+                    id={`receipt-${receipt.id}`}
+                    className="w-[340px] max-w-full bg-white text-black shadow-2xl relative font-sans text-xs select-text print:w-[80mm] print:shadow-none"
+                    style={{ backgroundColor: "#ffffff", color: "#000000", border: "2px solid #000000" }}
+                  >
+                    {/* Zigzag-style top bar */}
+                    <div className="text-center py-2 text-white text-[8px] font-black tracking-widest uppercase" style={{ backgroundColor: "#000000", color: "#ffffff" }}>
+                      ◆◆ NAROK COUNTY — MAASAI MARA GATEWAY ◆◆
+                    </div>
+
+                    <div className="p-4">
+                      <div className="text-center mb-3" style={{ paddingBottom: "10px", borderBottom: "2px solid #000000" }}>
+                        <h2 className="text-base font-black uppercase tracking-tight leading-tight" style={{ color: "#000000" }}>{receipt.name}</h2>
+                        <p className="text-[10px] mt-0.5 font-medium" style={{ color: "#333333" }}>{receipt.location}</p>
+                        <p className="text-[9px] italic" style={{ color: "#555555" }}>Gateway to the Mara</p>
+                      </div>
+
+                      {/* Boxed Meta */}
+                      <div className="text-[10px] space-y-1 mb-3 p-2.5" style={{ border: "1px solid #000000" }}>
+                        <div className="flex justify-between"><span className="font-semibold">KRA PIN (HOTEL):</span><span className="font-mono font-bold">{receipt.kraPin}</span></div>
+                        <div className="flex justify-between"><span className="font-semibold">{receipt.customerPinLabel}:</span><span className="font-mono font-bold">{receipt.customerPin}</span></div>
+                        <div className="flex justify-between" style={{ borderTop: "1px dashed #000000", paddingTop: "4px", marginTop: "4px" }}>
+                          <span className="font-semibold">RECEPTIONIST:</span><span className="font-semibold">{receipt.cashierName}</span>
+                        </div>
+                        <div className="flex justify-between"><span className="font-semibold">DATE & TIME:</span><span>{receipt.date} | {receipt.time}</span></div>
+                        <div className="flex justify-between"><span className="font-semibold">INVOICE NO:</span><span className="font-bold">{receipt.invoiceNo}</span></div>
+                      </div>
+
+                      {/* Stay */}
+                      <div className="mb-3" style={{ borderTop: "2px solid #000000", paddingTop: "8px" }}>
+                        <span className="text-[9px] font-bold uppercase tracking-widest block mb-1">LODGE ACCOMMODATION</span>
+                        <p className="font-bold text-xs leading-snug">{receipt.accommodationDesc}</p>
+                        <div className="mt-2 flex justify-between items-center text-xs" style={{ borderTop: "1px solid #000000", paddingTop: "6px", marginTop: "8px" }}>
+                          <span className="font-semibold">TOTAL CHARGE:</span>
+                          <span className="font-black text-sm">KES {receipt.amount.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</span>
+                        </div>
+                      </div>
+
+                      {/* Tax */}
+                      <div className="text-[10px] space-y-1 mb-3" style={{ borderTop: "2px solid #000000", borderBottom: "2px solid #000000", paddingTop: "8px", paddingBottom: "8px" }}>
+                        <div className="flex justify-between"><span>Net Amount (Excl. Tax)</span><span className="font-mono">KES {tax.netAmount.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</span></div>
+                        <div className="flex justify-between"><span>Catering Levy (2% Tourism Fund)</span><span className="font-mono">KES {tax.cateringLevy.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</span></div>
+                        <div className="flex justify-between"><span>VAT (16% Standard Rate)</span><span className="font-mono">KES {tax.vatAmount.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</span></div>
+                        <div className="flex justify-between font-black text-xs" style={{ borderTop: "1px solid #000000", paddingTop: "4px", marginTop: "4px" }}>
+                          <span>GROSS TOTAL</span><span className="font-mono text-sm">KES {tax.totalAmount.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</span>
+                        </div>
+                      </div>
+
+                      {/* Payment + QR side by side */}
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 text-[9px] space-y-0.5">
+                          <p className="font-bold uppercase">KRA eTIMS VERIFIED</p>
+                          <p className="font-mono text-[8px] break-all" style={{ color: "#333333" }}>CU: {receipt.cuNumber}</p>
+                          <p style={{ color: "#333333" }}>PAYMENT: {receipt.paymentMethod}</p>
+                          <p style={{ color: "#333333" }}>REF: {receipt.mpesaRef}</p>
+                        </div>
+                        <div className="p-1 bg-white shrink-0" style={{ border: "1px solid #000000" }}>
+                          <QRCodeSVG value={etimsVerificationUrl} size={70} level="M" />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="text-center py-1 text-white text-[8px] font-bold tracking-widest uppercase" style={{ backgroundColor: "#000000", color: "#ffffff" }}>
+                      *** KARIBU NAROK — ASANTE ***
+                    </div>
+                  </div>
+                )}
+
+                {/* ========================================================================= */}
+                {/* 8. DESIGN #8: SAVANNAH PARK HOTEL - Kitui — Typewriter Ledger Receipt     */}
+                {/* ========================================================================= */}
+                {receipt.id === "kitui-savannah" && (
+                  <div
+                    id={`receipt-${receipt.id}`}
+                    className="w-[340px] max-w-full bg-white text-black p-5 shadow-2xl relative text-xs select-text print:w-[80mm] print:shadow-none print:p-2"
+                    style={{ backgroundColor: "#ffffff", color: "#000000", border: "1px solid #000000", fontFamily: "'Courier New', Courier, monospace" }}
+                  >
+                    {/* Ledger-rule lines */}
+                    <div className="text-center pb-3" style={{ borderBottom: "3px double #000000" }}>
+                      <p className="text-[9px] font-bold tracking-[0.25em] uppercase" style={{ color: "#000000" }}>KITUI COUNTY — SEMI-ARID DESTINATION</p>
+                      <h2 className="text-sm font-black uppercase tracking-tight leading-tight mt-1" style={{ color: "#000000" }}>{receipt.name}</h2>
+                      <p className="text-[10px] mt-0.5" style={{ color: "#333333" }}>{receipt.location}</p>
+                      <p className="text-[9px] italic mt-0.5" style={{ color: "#555555" }}>Kitui Tourism Accommodation</p>
+                    </div>
+
+                    {/* Typewriter-style rows */}
+                    <div className="py-2 text-[10px] space-y-0.5" style={{ borderBottom: "1px solid #000000" }}>
+                      {[
+                        ["HOTEL KRA PIN", receipt.kraPin],
+                        [receipt.customerPinLabel, receipt.customerPin],
+                        ["DESK OFFICER", receipt.cashierName],
+                        ["DATE", receipt.date],
+                        ["TIME", receipt.time],
+                        ["INVOICE", receipt.invoiceNo],
+                        ["CU NO.", receipt.cuNumber],
+                      ].map(([label, val]) => (
+                        <div key={label} className="flex justify-between">
+                          <span style={{ color: "#444444" }}>{label}:</span>
+                          <span className="font-bold" style={{ color: "#000000" }}>{val}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Description */}
+                    <div className="py-2" style={{ borderBottom: "1px dashed #000000" }}>
+                      <p className="text-[9px] font-bold uppercase mb-1">ACCOMMODATION ITEM</p>
+                      <p className="font-bold text-xs leading-snug">{receipt.accommodationDesc}</p>
+                    </div>
+
+                    {/* Amounts as ledger */}
+                    <div className="py-2.5 text-[10px] space-y-0.5" style={{ borderBottom: "3px double #000000" }}>
+                      <div className="flex justify-between"><span>Net Amount</span><span>KES {tax.netAmount.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</span></div>
+                      <div className="flex justify-between"><span>Catering Levy 2%</span><span>KES {tax.cateringLevy.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</span></div>
+                      <div className="flex justify-between"><span>VAT 16% Rate A</span><span>KES {tax.vatAmount.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</span></div>
+                      <div className="flex justify-between font-black text-xs" style={{ borderTop: "1px solid #000000", paddingTop: "4px", marginTop: "4px" }}>
+                        <span>TOTAL (INCL. TAXES)</span><span>KES {tax.totalAmount.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</span>
+                      </div>
+                    </div>
+
+                    {/* Payment */}
+                    <div className="py-1.5 text-[9px] flex justify-between" style={{ borderBottom: "1px solid #000000" }}>
+                      <span>PAYMENT: {receipt.paymentMethod}</span><span>REF: {receipt.mpesaRef}</span>
+                    </div>
+
+                    {/* QR */}
+                    <div className="pt-3 text-center flex flex-col items-center">
+                      <div className="p-1" style={{ border: "2px solid #000000" }}>
+                        <QRCodeSVG value={etimsVerificationUrl} size={95} level="M" />
+                      </div>
+                      <p className="text-[8px] font-bold uppercase mt-1">KRA eTIMS VERIFIED RECEIPT</p>
+                      <p className="text-[7px]" style={{ color: "#555555" }}>CU SERIAL: {receipt.cuSerialNumber}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* ========================================================================= */}
+                {/* 9. DESIGN #9: TIMAU HEIGHTS HOTEL - Meru — Bold Split-Column Receipt      */}
+                {/* ========================================================================= */}
+                {receipt.id === "meru-timau" && (
+                  <div
+                    id={`receipt-${receipt.id}`}
+                    className="w-[340px] max-w-full bg-white text-black shadow-2xl relative font-sans text-xs select-text print:w-[80mm] print:shadow-none"
+                    style={{ backgroundColor: "#ffffff", color: "#000000", border: "2px solid #000000" }}
+                  >
+                    {/* Split header */}
+                    <div className="flex" style={{ borderBottom: "3px solid #000000" }}>
+                      <div className="flex-1 p-3 text-white" style={{ backgroundColor: "#000000" }}>
+                        <p className="text-[8px] font-bold tracking-widest uppercase" style={{ color: "#aaaaaa" }}>MERU COUNTY</p>
+                        <h2 className="text-[13px] font-black uppercase leading-tight mt-0.5" style={{ color: "#ffffff" }}>{receipt.name}</h2>
+                        <p className="text-[9px] mt-0.5" style={{ color: "#cccccc" }}>Executive Accommodation</p>
+                      </div>
+                      <div className="w-[90px] shrink-0 flex flex-col items-center justify-center p-2 bg-white" style={{ borderLeft: "3px solid #000000" }}>
+                        <QRCodeSVG value={etimsVerificationUrl} size={72} level="M" />
+                        <p className="text-[7px] font-bold mt-0.5 text-center" style={{ color: "#000000" }}>eTIMS QR</p>
+                      </div>
+                    </div>
+
+                    <div className="p-4">
+                      {/* Hotel & Guest Info */}
+                      <div className="grid grid-cols-2 gap-2 text-[10px] mb-3 p-2" style={{ border: "1px solid #000000" }}>
+                        <div>
+                          <span className="text-[8px] font-bold uppercase block" style={{ color: "#555555" }}>HOTEL KRA PIN</span>
+                          <span className="font-mono font-bold">{receipt.kraPin}</span>
+                        </div>
+                        <div>
+                          <span className="text-[8px] font-bold uppercase block" style={{ color: "#555555" }}>{receipt.customerPinLabel}</span>
+                          <span className="font-mono font-bold">{receipt.customerPin}</span>
+                        </div>
+                        <div>
+                          <span className="text-[8px] font-bold uppercase block" style={{ color: "#555555" }}>FRONT OFFICE</span>
+                          <span className="font-semibold">{receipt.cashierName}</span>
+                        </div>
+                        <div>
+                          <span className="text-[8px] font-bold uppercase block" style={{ color: "#555555" }}>DATE & TIME</span>
+                          <span>{receipt.date}</span>
+                          <span className="block text-[9px]">{receipt.time}</span>
+                        </div>
+                      </div>
+
+                      <div className="text-[10px] mb-2" style={{ borderBottom: "1px dashed #000000", paddingBottom: "6px" }}>
+                        <div className="flex justify-between"><span>INVOICE NO:</span><span className="font-bold">{receipt.invoiceNo}</span></div>
+                        <div className="flex justify-between text-[9px]"><span>CU NO.:</span><span className="font-mono">{receipt.cuNumber}</span></div>
+                      </div>
+
+                      {/* Stay */}
+                      <div className="mb-3" style={{ borderBottom: "2px solid #000000", paddingBottom: "8px" }}>
+                        <span className="text-[9px] font-bold uppercase tracking-wider block mb-1">ACCOMMODATION</span>
+                        <p className="font-bold text-xs leading-snug">{receipt.accommodationDesc}</p>
+                        <div className="mt-2 flex justify-between items-center" style={{ borderTop: "1px solid #000000", paddingTop: "6px", marginTop: "6px" }}>
+                          <span className="font-bold text-[11px] uppercase">Total Charge</span>
+                          <span className="font-black text-base">KES {receipt.amount.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</span>
+                        </div>
+                      </div>
+
+                      {/* Tax */}
+                      <div className="text-[10px] space-y-0.5 mb-3" style={{ borderBottom: "2px solid #000000", paddingBottom: "8px" }}>
+                        <div className="flex justify-between"><span>Net Amount (Excl. Tax)</span><span className="font-mono">KES {tax.netAmount.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</span></div>
+                        <div className="flex justify-between"><span>Catering Levy (2% Tourism Fund)</span><span className="font-mono">KES {tax.cateringLevy.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</span></div>
+                        <div className="flex justify-between"><span>VAT (16% Standard Rate)</span><span className="font-mono">KES {tax.vatAmount.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</span></div>
+                        <div className="flex justify-between font-black text-xs" style={{ borderTop: "1px solid #000000", paddingTop: "4px", marginTop: "4px" }}>
+                          <span>GROSS TOTAL (INCLUSIVE)</span><span className="font-mono text-sm">KES {tax.totalAmount.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</span>
+                        </div>
+                      </div>
+
+                      {/* Payment */}
+                      <div className="text-[9px] flex justify-between">
+                        <span>PAYMENT: {receipt.paymentMethod}</span><span>REF: {receipt.mpesaRef}</span>
+                      </div>
+                      <div className="text-[8px] mt-1 text-center font-mono" style={{ color: "#555555" }}>CU SERIAL: {receipt.cuSerialNumber}</div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ========================================================================= */}
+                {/* 10. DESIGN #10: OLEANDER HOTEL EMBU — Ruled Column Statement Receipt      */}
+                {/* ========================================================================= */}
+                {receipt.id === "embu-oleander" && (
+                  <div
+                    id={`receipt-${receipt.id}`}
+                    className="w-[340px] max-w-full bg-white text-black p-0 shadow-2xl relative font-sans text-xs select-text print:w-[80mm] print:shadow-none"
+                    style={{ backgroundColor: "#ffffff", color: "#000000", border: "1px solid #000000" }}
+                  >
+                    {/* Header band with ruled lines effect */}
+                    <div className="px-5 pt-4 pb-3 text-center" style={{ borderBottom: "4px double #000000" }}>
+                      <p className="text-[8px] font-black tracking-[0.3em] uppercase" style={{ color: "#000000" }}>EMBU COUNTY — OFFICIAL TAX RECEIPT</p>
+                      <h2 className="text-base font-black uppercase tracking-tight leading-tight mt-1" style={{ color: "#000000" }}>{receipt.name}</h2>
+                      <p className="text-[10px] font-medium mt-0.5" style={{ color: "#333333" }}>{receipt.location}</p>
+                      <div className="mt-1 inline-block px-2 py-0.5 text-[8px] font-bold tracking-widest uppercase" style={{ border: "1px solid #000000" }}>EMBU TOWN HOTEL</div>
+                    </div>
+
+                    {/* Ruled-column info block */}
+                    <div className="px-5">
+                      <table className="w-full text-[10px] border-collapse" style={{ borderBottom: "1px solid #000000" }}>
+                        <tbody>
+                          {[
+                            ["HOTEL KRA PIN", receipt.kraPin],
+                            [receipt.customerPinLabel, receipt.customerPin],
+                            ["CASHIER", receipt.cashierName],
+                            ["INVOICE NO", receipt.invoiceNo],
+                            ["DATE", receipt.date],
+                            ["TIME", receipt.time],
+                          ].map(([label, val]) => (
+                            <tr key={label} style={{ borderBottom: "1px solid #dddddd" }}>
+                              <td className="py-1 font-semibold pr-2" style={{ color: "#444444", width: "45%" }}>{label}</td>
+                              <td className="py-1 font-bold font-mono text-right" style={{ color: "#000000" }}>{val}</td>
+                            </tr>
+                          ))}
+                          <tr style={{ borderBottom: "1px solid #000000" }}>
+                            <td className="py-1 text-[9px] font-semibold pr-2" style={{ color: "#444444" }}>CU NUMBER</td>
+                            <td className="py-1 font-mono text-[8px] text-right" style={{ color: "#333333" }}>{receipt.cuNumber}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+
+                      {/* Stay */}
+                      <div className="py-3" style={{ borderBottom: "2px solid #000000" }}>
+                        <span className="text-[9px] font-bold uppercase tracking-wider block mb-1">ACCOMMODATION DESCRIPTION</span>
+                        <p className="font-bold text-xs leading-snug">{receipt.accommodationDesc}</p>
+                        <div className="mt-2 flex justify-between items-center text-xs p-2" style={{ border: "2px solid #000000" }}>
+                          <span className="font-bold uppercase">Accommodation Charge:</span>
+                          <span className="font-black text-sm">KES {receipt.amount.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</span>
+                        </div>
+                      </div>
+
+                      {/* Tax breakdown */}
+                      <div className="py-2.5 text-[10px] space-y-1" style={{ borderBottom: "2px solid #000000" }}>
+                        <div className="flex justify-between"><span>Net Amount (Excl. Tax)</span><span className="font-mono">KES {tax.netAmount.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</span></div>
+                        <div className="flex justify-between"><span>Catering Levy (2% Tourism Fund)</span><span className="font-mono">KES {tax.cateringLevy.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</span></div>
+                        <div className="flex justify-between"><span>VAT (16% Rate A)</span><span className="font-mono">KES {tax.vatAmount.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</span></div>
+                        <div className="flex justify-between font-black text-xs" style={{ borderTop: "1px solid #000000", paddingTop: "4px", marginTop: "4px" }}>
+                          <span>GROSS TOTAL (INCLUSIVE)</span><span className="font-mono text-sm">KES {tax.totalAmount.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</span>
+                        </div>
+                      </div>
+
+                      {/* Payment */}
+                      <div className="py-1.5 text-[9px] flex justify-between" style={{ borderBottom: "1px dashed #000000" }}>
+                        <span>PAYMENT: {receipt.paymentMethod}</span><span>REF: {receipt.mpesaRef}</span>
+                      </div>
+
+                      {/* QR */}
+                      <div className="py-3 text-center flex flex-col items-center">
+                        <div className="p-1" style={{ border: "1px solid #000000" }}>
+                          <QRCodeSVG value={etimsVerificationUrl} size={100} level="M" />
+                        </div>
+                        <p className="text-[8px] font-bold uppercase mt-1">KRA eTIMS VERIFIED RECEIPT</p>
+                        <p className="text-[7px] font-mono" style={{ color: "#555555" }}>CU SERIAL: {receipt.cuSerialNumber}</p>
+                      </div>
+                    </div>
+
+                    {/* Bottom footer band */}
+                    <div className="text-center py-1 text-white text-[8px] font-bold tracking-widest uppercase" style={{ backgroundColor: "#000000", color: "#ffffff" }}>
+                      *** OLEANDER HOTEL — THANK YOU ***
                     </div>
                   </div>
                 )}

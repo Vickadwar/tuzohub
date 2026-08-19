@@ -523,4 +523,193 @@ async function sendSmsToConsumer(tenantId: string, phoneNumber: string, message:
   });
 }
 
+/**
+ * POST /api/mpesa/generate-credential
+ *
+ * Accepts a Safaricom public certificate (PEM/CER content) + Initiator Password,
+ * encrypts the password using RSA PKCS1v15, stores both cert + SecurityCredential
+ * in tenant settings, and returns the encrypted credential.
+ *
+ * Body: { certPem?: string, initiatorPassword: string, baseUrl?: string }
+ *   certPem         — PEM text of the Safaricom cert (sandbox or production)
+ *   initiatorPassword — plaintext M-Pesa Initiator password
+ *   baseUrl         — optional, determines sandbox vs production cert fallback
+ *
+ * If certPem is omitted, uses the cert already stored in tenant settings.
+ */
+import { generateSecurityCredential } from "../../lib/daraja-auth";
+
+app.post("/generate-credential", async (c) => {
+  const tenantId = await resolveTenantId(c);
+
+  if (!tenantId) {
+    return c.json({ success: false, error: "No active tenant found in system" }, 400);
+  }
+
+  const body = await c.req.json().catch(() => ({})) as any;
+  const { certPem, initiatorPassword, baseUrl } = body;
+
+  if (!initiatorPassword) {
+    return c.json({ success: false, error: "initiatorPassword is required" }, 400);
+  }
+
+  try {
+    // Fetch existing tenant settings to get stored cert if not provided in body
+    const tSettingsRecords = await db.select().from(tenantSettings).where(eq(tenantSettings.tenantId, tenantId)).limit(1);
+    const tSettings = tSettingsRecords[0];
+    const creds = (tSettings?.credentials || {}) as any;
+
+    // Determine which cert to use — body > stored > env > fallback
+    const resolvedCert: string | undefined = certPem
+      || creds.certificatePem
+      || creds.darajaCertificatePem
+      || (baseUrl?.includes("api.safaricom.co.ke")
+          ? process.env.DARAJA_PROD_PUBLIC_CERT
+          : process.env.DARAJA_PUBLIC_CERT)
+      || undefined;
+
+    // Encrypt the initiator password
+    const securityCredential = generateSecurityCredential(
+      initiatorPassword,
+      resolvedCert,
+      baseUrl || creds.darajaBaseUrl
+    );
+
+    if (!securityCredential || securityCredential === "PLACEHOLDER") {
+      return c.json({
+        success: false,
+        error: "Encryption failed — certificate may be invalid. Please upload a valid Safaricom .cer / PEM certificate."
+      }, 400);
+    }
+
+    // Persist: store cert + generated SecurityCredential + initiatorPassword in tenant settings
+    if (tSettings) {
+      const updatedCreds = {
+        ...creds,
+        ...(certPem ? { certificatePem: certPem } : {}),
+        darajaInitiatorPassword: initiatorPassword,
+        darajaSecurityCredential: securityCredential,
+      };
+
+      await db.update(tenantSettings)
+        .set({ credentials: updatedCreds, updatedAt: new Date() })
+        .where(eq(tenantSettings.id, tSettings.id));
+    }
+
+    return c.json({
+      success: true,
+      message: "SecurityCredential generated and saved to tenant settings successfully.",
+      securityCredential,
+      credentialLength: securityCredential.length,
+      certSource: certPem ? "uploaded" : resolvedCert ? "stored" : "fallback",
+    });
+
+  } catch (error: any) {
+    console.error("[Generate Credential Error]", error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+/**
+ * POST /api/mpesa/upload-cert
+ *
+ * Accepts a multipart form upload of a Safaricom .cer file.
+ * Reads the file content, stores it as the tenant's certificatePem,
+ * and if an initiatorPassword is already in tenant settings,
+ * auto-generates and saves the SecurityCredential immediately.
+ *
+ * Form fields:
+ *   cert            — the .cer / .pem file
+ *   initiatorPassword — optional, if provided overrides stored password
+ *   baseUrl         — optional, for sandbox vs production selection
+ */
+app.post("/upload-cert", async (c) => {
+  const tenantId = await resolveTenantId(c);
+
+  if (!tenantId) {
+    return c.json({ success: false, error: "No active tenant found" }, 400);
+  }
+
+  try {
+    const formData = await c.req.formData();
+    const certFile = formData.get("cert") as File | null;
+    const initiatorPasswordOverride = formData.get("initiatorPassword") as string | null;
+    const baseUrl = formData.get("baseUrl") as string | null;
+
+    if (!certFile) {
+      return c.json({ success: false, error: "No certificate file provided. Upload a .cer or .pem file." }, 400);
+    }
+
+    // Read file content as text
+    const certPem = await certFile.text();
+
+    if (!certPem.trim()) {
+      return c.json({ success: false, error: "Certificate file is empty." }, 400);
+    }
+
+    // Validate basic PEM structure
+    const isCert = certPem.includes("BEGIN CERTIFICATE") || certPem.includes("BEGIN PUBLIC KEY");
+    const isBase64 = !certPem.includes("BEGIN") && /^[A-Za-z0-9+/=\r\n]+$/.test(certPem.trim());
+
+    if (!isCert && !isBase64) {
+      return c.json({
+        success: false,
+        error: "Invalid certificate file. Provide a valid Safaricom X.509 .cer or .pem certificate."
+      }, 400);
+    }
+
+    // Load tenant settings
+    const tSettingsRecords = await db.select().from(tenantSettings).where(eq(tenantSettings.tenantId, tenantId)).limit(1);
+    const tSettings = tSettingsRecords[0];
+    const creds = (tSettings?.credentials || {}) as any;
+
+    const resolvedPassword = initiatorPasswordOverride || creds.darajaInitiatorPassword || creds.darajaPassword;
+    const resolvedBaseUrl = baseUrl || creds.darajaBaseUrl;
+
+    // Auto-generate SecurityCredential if password is available
+    let securityCredential: string | null = null;
+    let credentialGenerated = false;
+
+    if (resolvedPassword) {
+      securityCredential = generateSecurityCredential(resolvedPassword, certPem, resolvedBaseUrl);
+      credentialGenerated = securityCredential.length > 100;
+    }
+
+    // Save cert + optional auto-generated credential to tenant settings
+    if (tSettings) {
+      const updatedCreds: any = {
+        ...creds,
+        certificatePem: certPem,
+        darajaCertificatePem: certPem,
+        ...(credentialGenerated && securityCredential ? {
+          darajaSecurityCredential: securityCredential,
+          darajaInitiatorPassword: resolvedPassword,
+        } : {}),
+      };
+
+      await db.update(tenantSettings)
+        .set({ credentials: updatedCreds, updatedAt: new Date() })
+        .where(eq(tenantSettings.id, tSettings.id));
+    }
+
+    return c.json({
+      success: true,
+      message: credentialGenerated
+        ? "Certificate uploaded and SecurityCredential auto-generated and saved successfully!"
+        : "Certificate uploaded and saved. Set your Initiator Password and click Generate Credential to complete setup.",
+      certUploaded: true,
+      credentialGenerated,
+      securityCredential: credentialGenerated ? securityCredential : null,
+      hint: !credentialGenerated
+        ? "Provide initiatorPassword in the form or save it in your settings first, then re-upload or call /generate-credential."
+        : undefined,
+    });
+
+  } catch (error: any) {
+    console.error("[Upload Cert Error]", error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
 export default app;
+
